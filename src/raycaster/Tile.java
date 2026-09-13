@@ -22,11 +22,20 @@ public class Tile {
         return tile;
     }
 
-    private static Random.State rng = Random.newState(42L);
+    private static Random.State RNG = Random.newState(42L);
+    private static IVec2 DEFAULT_TEXTURE_SIZE = new IVec2(16,16);
 
     private static PixelGraphics[] textureMap = new PixelGraphics[] {
-            MaterialGenerator.generate(MaterialGenerator.Material.BRICK, 32, 32, rng),
-            MaterialGenerator.generate(MaterialGenerator.Material.DIRT, 32, 32, rng),
+            MaterialGenerator.generate(MaterialGenerator.Material.BRICK, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 0
+            MaterialGenerator.generate(MaterialGenerator.Material.DIRT, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 1
+            MaterialGenerator.generate(MaterialGenerator.Material.GRASS, DEFAULT_TEXTURE_SIZE.x ,DEFAULT_TEXTURE_SIZE.y, RNG), // 2
+            MaterialGenerator.generate(MaterialGenerator.Material.SAND, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 3
+            MaterialGenerator.generate(MaterialGenerator.Material.WATER, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 4
+            MaterialGenerator.generate(MaterialGenerator.Material.ASPHALT, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 5
+            MaterialGenerator.generate(MaterialGenerator.Material.CONCRETE, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG), // 6
+            MaterialGenerator.generate(MaterialGenerator.Material.SKY, DEFAULT_TEXTURE_SIZE.x, DEFAULT_TEXTURE_SIZE.y, RNG) // 7
+
+
     };
 
     public float floor;

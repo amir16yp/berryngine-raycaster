@@ -11,7 +11,23 @@ public final class RaycastScene implements Scene {
     private final HeightRaycaster raycaster;
 
     public RaycastScene() {
-        map = Level.createMap();
+//        map = Level.createMap();
+        LevelGenerator.TileStyle outside = new LevelGenerator.TileStyle(
+                6, // concrete
+                2, // grass
+                4, // water
+                7, // sky
+                0.0f,
+                7.0f
+        );
+
+        LevelGenerator.TileStyle road = outside.floorTexture(5);
+
+        map = LevelGenerator.create(64, 64)
+                .floorRect(0,0,64,64, outside)
+                .floorRect(16, 0, 18, 64, road) // road
+                        .build();
+
 
         camera = new Camera3D(
                 new Vec3(8.0f, 3.0f, 0.5f)
@@ -120,7 +136,7 @@ public final class RaycastScene implements Scene {
                 turnSpeed
         );
 
-        updateMouseInput();
+        //updateMouseInput();
     }
 
     @Override

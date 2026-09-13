@@ -41,7 +41,8 @@ public final class MaterialGenerator {
         METAL,
         RUSTED_METAL,
         GLASS,
-        ROAD_MARKING
+        ROAD_MARKING,
+        SKY
     }
 
     /**
@@ -127,9 +128,120 @@ public final class MaterialGenerator {
             case ROAD_MARKING:
                 roadMarking(gfx, rng);
                 break;
+
+            case SKY:
+                sky(gfx, rng);
+                break;
         }
 
         return gfx;
+    }
+
+    public static void sky(PixelGraphics gfx, Random.State rng) {
+        int w = gfx.width;
+        int h = gfx.height;
+
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+
+        for (int y = 0; y < h; y++) {
+
+            // Darker/deeper blue at the top, lighter near the horizon.
+            float t = h <= 1
+                    ? 0.0f
+                    : (float) y / (h - 1);
+
+            // Smooth atmospheric gradient.
+            float smooth = t * t * (3.0f - 2.0f * t);
+
+            int r = (int) (35 + smooth * 85);
+            int g = (int) (105 + smooth * 90);
+            int b = (int) (190 + smooth * 55);
+
+            for (int x = 0; x < w; x++) {
+
+                // Small per-pixel variation keeps the sky from looking flat.
+                int variation = rng.nextInt(-3, 4);
+
+                gfx.pixels[y * w + x] = rgb(
+                        clamp(r + variation),
+                        clamp(g + variation),
+                        clamp(b + variation)
+                );
+            }
+        }
+
+        // Soft cloud patches.
+        int cloudCount = Math.max(2, (w * h) / 700);
+
+        for (int i = 0; i < cloudCount; i++) {
+            int cx = rng.nextInt(w);
+            int cy = rng.nextInt(Math.max(1, h / 2));
+
+            int radiusX = rng.nextInt(
+                    Math.max(2, w / 12),
+                    Math.max(3, w / 5)
+            );
+
+            int radiusY = rng.nextInt(
+                    Math.max(1, h / 20),
+                    Math.max(2, h / 9)
+            );
+
+            for (int y = -radiusY; y <= radiusY; y++) {
+                for (int x = -radiusX; x <= radiusX; x++) {
+
+                    float nx = (float) x / radiusX;
+                    float ny = (float) y / radiusY;
+
+                    if (nx * nx + ny * ny > 1.0f) {
+                        continue;
+                    }
+
+                    int px = cx + x;
+                    int py = cy + y;
+
+                    if (px < 0 || px >= w || py < 0 || py >= h) {
+                        continue;
+                    }
+
+                    // Clouds are softer around the edges.
+                    float distance = nx * nx + ny * ny;
+                    int alpha = (int) ((1.0f - distance) * 55.0f);
+
+                    if (alpha > 0) {
+                        gfx.blendPixel(
+                                px,
+                                py,
+                                rgba(245, 248, 255, alpha)
+                        );
+                    }
+                }
+            }
+        }
+
+        // A few thin high-altitude cloud streaks.
+        int streaks = Math.max(1, w / 40);
+
+        for (int i = 0; i < streaks; i++) {
+            int y = rng.nextInt(Math.max(1, h / 2));
+            int x = rng.nextInt(w);
+            int length = rng.nextInt(
+                    Math.max(2, w / 10),
+                    Math.max(3, w / 2)
+            );
+
+            for (int j = 0; j < length && x + j < w; j++) {
+                int alpha = rng.nextInt(8, 30);
+
+                gfx.blendPixel(
+                        x + j,
+                        y,
+                        rgba(240, 247, 255, alpha)
+                );
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
