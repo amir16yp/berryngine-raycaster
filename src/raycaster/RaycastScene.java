@@ -3,12 +3,14 @@ package raycaster;
 import berryngine.*;
 
 import java.awt.event.KeyEvent;
+import java.util.ArrayList;
 
 public final class RaycastScene implements Scene {
 
     private TileMap map;
     private Camera3D camera;
     private HeightRaycaster raycaster;
+    private ArrayList<Entity3D> entityList = new ArrayList<Entity3D>();
 
     public RaycastScene() {
 
@@ -119,7 +121,8 @@ public final class RaycastScene implements Scene {
         framebufferPixelGraphics.clear(Color.WHITE);
         raycaster.render(
                 framebufferPixelGraphics,
-                camera
+                camera,
+                entityList
         );
     }
 
@@ -384,6 +387,24 @@ public final class RaycastScene implements Scene {
         map = gen.build();
         camera = new Camera3D(
                 new Vec3(8.0f, 3.0f, 0.5f)
+        );
+
+        entityList.add(
+                new Entity3D(
+                        new Vec3(
+                                8.0f,
+                                8.0f,
+                                0.0f
+                        ),
+                        1.0f,
+                        1.0f,
+                        0.2f,
+                        ShapeGenerator.outlineHeart(
+                                32,
+                                32,
+                                Color.RED
+                        )
+                )
         );
 
         camera.rotation.y = Mathf.toRadians(90.0f);
