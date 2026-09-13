@@ -502,7 +502,7 @@ public final class HeightRaycaster {
                         entityWidth;
 
         u =
-                Math.clamp(
+                Mathf.clamp(
                         u,
                         0.0f,
                         0.999999f
@@ -536,7 +536,7 @@ public final class HeightRaycaster {
                                 entityHeight;
 
         v =
-                Math.clamp(
+                Mathf.clamp(
                         v,
                         0.0f,
                         0.999999f
@@ -2371,14 +2371,14 @@ public final class HeightRaycaster {
             }
 
             textureX =
-                    Math.clamp(
+                    Mathf.clamp(
                             textureX,
                             0.0f,
                             0.999999f
                     );
 
             textureY =
-                    Math.clamp(
+                    Mathf.clamp(
                             textureY,
                             0.0f,
                             0.999999f
@@ -2403,14 +2403,14 @@ public final class HeightRaycaster {
                     );
 
             texX =
-                    Math.clamp(
+                    Mathf.clamp(
                             texX,
                             0,
                             texture.width - 1
                     );
 
             texY =
-                    Math.clamp(
+                    Mathf.clamp(
                             texY,
                             0,
                             texture.height - 1
@@ -2573,7 +2573,7 @@ public final class HeightRaycaster {
                 );
 
         texX =
-                Math.clamp(
+                Mathf.clamp(
                         texX,
                         0,
                         texture.width - 1
@@ -2612,7 +2612,7 @@ public final class HeightRaycaster {
                             projectedHeight;
 
             t =
-                    Math.clamp(
+                    Mathf.clamp(
                             t,
                             0.0f,
                             0.999999f
@@ -2625,7 +2625,7 @@ public final class HeightRaycaster {
                     );
 
             texY =
-                    Math.clamp(
+                    Mathf   .clamp(
                             texY,
                             0,
                             texture.height - 1

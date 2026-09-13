@@ -17,9 +17,9 @@ public class HeartEntity extends Entity3D {
     public HeartEntity(Vec3 pos) {
         super(
                 pos,
-                1.0f,
-                1.0f,
-                0.2f,
+                0.5f,
+                0.5f,
+                0.1f,
                 sprite
         );
     }

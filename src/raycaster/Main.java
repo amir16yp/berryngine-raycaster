@@ -6,7 +6,7 @@ public final class Main {
 
     public static GameWindow GAME_WINDOW;
 
-    static void main(String[] args) {
+    public static void main(String[] args) {
         GAME_WINDOW = GameWindow.builder(
                         "Height Raycaster",
                         480,
