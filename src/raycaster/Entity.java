@@ -18,9 +18,9 @@ public class Entity {
         TileMap map = RaycastScene.INSTANCE.map;
 
         return pos.x < 0.0f ||
-                pos.z < 0.0f ||
+                pos.y < 0.0f ||
                 pos.x >= map.getWidth() ||
-                pos.z >= map.getHeight();
+                pos.y >= map.getHeight();
     }
 
 }

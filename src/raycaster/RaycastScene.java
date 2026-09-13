@@ -63,7 +63,7 @@ public final class RaycastScene implements Scene {
                 playerEntity.camera,
                 entityList
         );
-        pg.renderString(BitmapFont.DEFAULT_8X9,playerEntity.pos.toString(),0,0,Color.BLACK);
+        pg.renderString(BitmapFont.DEFAULT_8X9,playerEntity.pos.toString() + " e:" + entityList.size(),0,0,Color.BLACK);
         //PostFX.saturation(pg, 0.4f);
     }
 
