@@ -117,7 +117,6 @@ public final class RaycastScene implements Scene {
             FramebufferPixelGraphics framebufferPixelGraphics
     ) {
         framebufferPixelGraphics.clear(Color.WHITE);
-
         raycaster.render(
                 framebufferPixelGraphics,
                 camera

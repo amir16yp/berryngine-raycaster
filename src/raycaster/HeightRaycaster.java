@@ -5,7 +5,33 @@ import berryngine.PixelGraphics;
 
 import java.util.Arrays;
 
+/**
+ * Software height-field raycaster.
+ *
+ * <p>Geometry model:</p>
+ *
+ * <ul>
+ *     <li>Walkable tiles occupy the vertical interval
+ *         [floor, ceiling].</li>
+ *     <li>Adjacent tiles with different floor heights create
+ *         vertical step surfaces.</li>
+ *     <li>Solid tiles occupy their complete [floor, ceiling]
+ *         interval and stop the ray.</li>
+ *     <li>Solid tiles may optionally render a top plane.</li>
+ * </ul>
+ *
+ * <p>Important depth rule:</p>
+ *
+ * <p>Every value written to the depth buffer is camera-forward
+ * (perpendicular) depth. Ray distance is never written directly
+ * to the depth buffer.</p>
+ *
+ * <p>The renderer performs no object allocation inside render().</p>
+ */
 public final class HeightRaycaster {
+
+    private static final float EPSILON = 0.000001f;
+    private static final float MIN_DISTANCE = 0.0001f;
 
     private final TileMap map;
 
@@ -14,14 +40,8 @@ public final class HeightRaycaster {
 
     private final float focalLength;
 
-    /*
-     * ---------------------------------------------------------
-     * RENDER DISTANCE
-     * ---------------------------------------------------------
-     *
-     * Measured in world/tile units.
-     *
-     * Rays stop once they reach this distance.
+    /**
+     * Maximum ray distance in world/tile units.
      */
     private final float renderDistance;
 
@@ -29,29 +49,62 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * REUSABLE RENDER BUFFERS
      * ---------------------------------------------------------
-     *
-     * These are allocated once in the constructor.
-     *
-     * Nothing is allocated inside render().
      */
+
     private final Surface[] surfacePool;
     private final PlaneSurface[] planePool;
 
+    /**
+     * One depth value for every screen row.
+     *
+     * Because the renderer processes one screen column at a time,
+     * this is a column depth buffer rather than a complete
+     * width * height buffer.
+     *
+     * Every value is camera-forward depth.
+     */
     private final float[] depth;
+
+    /*
+     * Debug information.
+     *
+     * These are intentionally simple counters rather than
+     * allocations or exception-based diagnostics.
+     */
+    private int surfacePoolOverflows;
+    private int planePoolOverflows;
 
     /*
      * ---------------------------------------------------------
      * VERTICAL SURFACE
      * ---------------------------------------------------------
      */
+
     private static final class Surface {
 
+        /**
+         * Ray distance at which the surface was hit.
+         */
         float distance;
+
+        /**
+         * Camera-forward/perpendicular distance.
+         */
         float perpendicularDistance;
 
+        /**
+         * Lower world-space Z.
+         */
         float low;
+
+        /**
+         * Upper world-space Z.
+         */
         float high;
 
+        /**
+         * Horizontal texture coordinate.
+         */
         float textureX;
 
         Tile tile;
@@ -89,16 +142,36 @@ public final class HeightRaycaster {
      * HORIZONTAL SURFACE
      * ---------------------------------------------------------
      */
+
     private static final class PlaneSurface {
 
+        /**
+         * Ray distance at which this tile begins.
+         */
         float entryDistance;
+
+        /**
+         * Ray distance at which this tile ends.
+         */
         float exitDistance;
 
+        /**
+         * World-space Z of the plane.
+         */
         float height;
 
         Tile tile;
 
+        /**
+         * True for ceilings.
+         */
         boolean ceiling;
+
+        /**
+         * True for a solid/raised top surface.
+         *
+         * Ordinary walkable floors have top == false.
+         */
         boolean top;
 
         void set(
@@ -134,12 +207,31 @@ public final class HeightRaycaster {
      * CONSTRUCTOR
      * ---------------------------------------------------------
      */
+
     public HeightRaycaster(
             TileMap map,
             int width,
             int height,
             float fov,
             float renderDistance) {
+
+        if (map == null) {
+            throw new IllegalArgumentException(
+                    "map cannot be null"
+            );
+        }
+
+        if (width <= 0) {
+            throw new IllegalArgumentException(
+                    "width must be > 0"
+            );
+        }
+
+        if (height <= 0) {
+            throw new IllegalArgumentException(
+                    "height must be > 0"
+            );
+        }
 
         this.map = map;
 
@@ -163,49 +255,47 @@ public final class HeightRaycaster {
          * DEPTH BUFFER
          * -----------------------------------------------------
          */
+
         depth =
                 new float[height];
 
         /*
          * -----------------------------------------------------
-         * POOL SIZE
+         * POOL SIZING
          * -----------------------------------------------------
          *
          * A ray can cross approximately:
          *
          *     renderDistance * sqrt(2)
          *
-         * tiles in the worst case.
+         * grid cells in the worst case.
          *
-         * Add some extra room for boundary cases.
+         * Add generous headroom for boundary conditions.
          */
+
         int maxTiles =
                 (int) Math.ceil(
                         renderDistance *
                                 1.5f
-                ) + 8;
+                ) + 16;
 
-        /*
-         * One vertical transition surface per crossed tile
-         * is enough for normal map geometry.
-         */
         int maxSurfaces =
                 Math.max(
-                        16,
+                        32,
                         maxTiles
                 );
 
         /*
-         * Each walkable tile can produce:
+         * Each walkable tile can potentially contribute:
          *
          *     floor
          *     ceiling
          *
-         * so allow approximately two planes per tile.
+         * so allow two planes per tile.
          */
         int maxPlanes =
                 Math.max(
-                        32,
+                        64,
                         maxTiles * 2
                 );
 
@@ -236,15 +326,8 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * BACKWARD-COMPATIBLE CONSTRUCTOR
      * ---------------------------------------------------------
-     *
-     * Optional convenience constructor.
-     *
-     * If you were previously constructing the renderer with:
-     *
-     *     new HeightRaycaster(map, width, height, fov)
-     *
-     * this keeps that code working.
      */
+
     public HeightRaycaster(
             TileMap map,
             int width,
@@ -265,9 +348,16 @@ public final class HeightRaycaster {
      * RENDER
      * ---------------------------------------------------------
      */
+
     public void render(
             PixelGraphics pg,
             Camera3D camera) {
+
+        if (pg == null ||
+                camera == null) {
+
+            return;
+        }
 
         for (int screenX = 0;
              screenX < width;
@@ -286,17 +376,26 @@ public final class HeightRaycaster {
      * CAST COLUMN
      * ---------------------------------------------------------
      */
+
     private void castColumn(
             PixelGraphics pg,
             Camera3D camera,
             int screenX) {
 
+        /*
+         * Screen-space horizontal coordinate:
+         *
+         *     -1 ... +1
+         */
         float cameraX =
                 2.0f *
                         (screenX + 0.5f) /
                         (float) width
                         - 1.0f;
 
+        /*
+         * Horizontal ray angle relative to camera forward.
+         */
         float rayAngle =
                 camera.rotation.y
                         +
@@ -328,6 +427,7 @@ public final class HeightRaycaster {
      * DDA
      * ---------------------------------------------------------
      */
+
     private void castDDA(
             PixelGraphics pg,
             Camera3D camera,
@@ -350,13 +450,10 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * RESET COUNTERS
+         * RESET PER-RAY COUNTERS
          * -----------------------------------------------------
-         *
-         * No allocations.
-         *
-         * The objects in the pools are simply overwritten.
          */
+
         int surfaceCount = 0;
         int planeCount = 0;
 
@@ -364,6 +461,10 @@ public final class HeightRaycaster {
          * -----------------------------------------------------
          * RESET DEPTH
          * -----------------------------------------------------
+         *
+         * This is not an allocation.
+         *
+         * It clears only the current column's depth buffer.
          */
         Arrays.fill(
                 depth,
@@ -375,11 +476,12 @@ public final class HeightRaycaster {
          * DELTA DISTANCE
          * -----------------------------------------------------
          */
+
         final float deltaDistX;
         final float deltaDistY;
 
         if (Math.abs(rayDirX) <
-                0.000001f) {
+                EPSILON) {
 
             deltaDistX =
                     Float.POSITIVE_INFINITY;
@@ -394,7 +496,7 @@ public final class HeightRaycaster {
         }
 
         if (Math.abs(rayDirY) <
-                0.000001f) {
+                EPSILON) {
 
             deltaDistY =
                     Float.POSITIVE_INFINITY;
@@ -410,9 +512,10 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * STEP
+         * STEP DIRECTION
          * -----------------------------------------------------
          */
+
         final int stepX;
         final int stepY;
 
@@ -458,84 +561,93 @@ public final class HeightRaycaster {
          * CURRENT TILE
          * -----------------------------------------------------
          */
-        Tile previous = null;
+
+        Tile current = null;
 
         if (map.inBounds(
                 mapX,
                 mapY)) {
 
-            previous =
+            current =
                     map.get(
                             mapX,
                             mapY
                     );
-        }
 
-        /*
-         * Camera cannot start outside the map.
-         */
-        if (previous == null &&
-                !map.inBounds(
-                        mapX,
-                        mapY)) {
+        } else {
 
+            /*
+             * Camera is outside the map.
+             *
+             * We cannot reliably traverse from here.
+             */
             return;
         }
 
         /*
-         * Distance where current tile began.
+         * Distance at which current tile begins.
          */
-        float previousEntryDistance =
+        float currentEntryDistance =
                 0.0f;
 
         /*
          * -----------------------------------------------------
          * SAFETY LIMIT
          * -----------------------------------------------------
+         *
+         * Worst-case grid crossing rate is approximately:
+         *
+         *     |dx| + |dy|
+         *
+         * whose maximum is sqrt(2).
+         *
+         * Use a generous bound.
          */
         int maxSteps =
                 (int) Math.ceil(
-                        renderDistance * 2.0f
-                ) + 16;
+                        renderDistance *
+                                1.5f
+                ) + 32;
 
         /*
          * -----------------------------------------------------
          * WALK RAY
          * -----------------------------------------------------
          */
+
         for (int iteration = 0;
              iteration < maxSteps;
              iteration++) {
 
-            final float rayDistance;
-            final int side;
-
             /*
              * -------------------------------------------------
-             * RENDER DISTANCE CHECK
+             * FIND NEXT GRID BOUNDARY
              * -------------------------------------------------
              */
+
             float nextBoundary =
                     Math.min(
                             sideDistX,
                             sideDistY
                     );
 
+            /*
+             * -------------------------------------------------
+             * RENDER-DISTANCE LIMIT
+             * -------------------------------------------------
+             *
+             * The current tile continues until the render
+             * distance if no map boundary is reached first.
+             */
             if (nextBoundary >
                     renderDistance) {
 
-                /*
-                 * The current tile still extends up to the
-                 * render-distance boundary.
-                 *
-                 * Render the visible portion of it.
-                 */
-                if (previous != null) {
+                if (current != null) {
 
                     planeCount =
                             addTilePlanes(
-                                    previous,
-                                    previousEntryDistance,
+                                    current,
+                                    currentEntryDistance,
                                     renderDistance,
                                     planeCount
                             );
@@ -546,12 +658,43 @@ public final class HeightRaycaster {
 
             /*
              * -------------------------------------------------
-             * FIND NEXT GRID BOUNDARY
+             * CURRENT TILE EXIT
              * -------------------------------------------------
              */
+
+            final float exitDistance =
+                    nextBoundary;
+
+            /*
+             * -------------------------------------------------
+             * RENDER CURRENT TILE
+             * -------------------------------------------------
+             */
+
+            if (current != null) {
+
+                planeCount =
+                        addTilePlanes(
+                                current,
+                                currentEntryDistance,
+                                exitDistance,
+                                planeCount
+                        );
+            }
+
+            /*
+             * -------------------------------------------------
+             * CROSS GRID BOUNDARY
+             * -------------------------------------------------
+             */
+
+            final int side;
+
+            final float boundaryDistance;
+
             if (sideDistX < sideDistY) {
 
-                rayDistance =
+                boundaryDistance =
                         sideDistX;
 
                 sideDistX +=
@@ -564,7 +707,7 @@ public final class HeightRaycaster {
 
             } else {
 
-                rayDistance =
+                boundaryDistance =
                         sideDistY;
 
                 sideDistY +=
@@ -576,50 +719,32 @@ public final class HeightRaycaster {
                 side = 1;
             }
 
-            /*
-             * Safety check.
-             */
-            if (rayDistance >
+            if (boundaryDistance >
                     renderDistance) {
-
-                if (previous != null) {
-
-                    planeCount =
-                            addTilePlanes(
-                                    previous,
-                                    previousEntryDistance,
-                                    renderDistance,
-                                    planeCount
-                            );
-                }
 
                 break;
             }
 
             /*
              * -------------------------------------------------
-             * OUTSIDE MAP
+             * FIND NEXT TILE
              * -------------------------------------------------
              */
+
             if (!map.inBounds(
                     mapX,
                     mapY)) {
 
-                if (previous != null) {
-
-                    planeCount =
-                            addTilePlanes(
-                                    previous,
-                                    previousEntryDistance,
-                                    rayDistance,
-                                    planeCount
-                            );
-                }
-
+                /*
+                 * We reached the edge of the map.
+                 *
+                 * Current tile was already rendered up to this
+                 * boundary above.
+                 */
                 break;
             }
 
-            Tile current =
+            Tile next =
                     map.get(
                             mapX,
                             mapY
@@ -627,102 +752,95 @@ public final class HeightRaycaster {
 
             /*
              * -------------------------------------------------
-             * FINISH PREVIOUS TILE
-             * -------------------------------------------------
-             */
-            if (previous != null) {
-
-                planeCount =
-                        addTilePlanes(
-                                previous,
-                                previousEntryDistance,
-                                rayDistance,
-                                planeCount
-                        );
-            }
-
-            /*
-             * -------------------------------------------------
-             * PERPENDICULAR DISTANCE
-             * -------------------------------------------------
-             */
-            float perpendicularDistance =
-                    rayDistance *
-                            Mathf.cos(
-                                    rayAngle -
-                                            camera.rotation.y
-                            );
-
-            if (perpendicularDistance <
-                    0.0001f) {
-
-                perpendicularDistance =
-                        0.0001f;
-            }
-
-            /*
-             * -------------------------------------------------
              * HEIGHT TRANSITION
              * -------------------------------------------------
+             *
+             * A transition exists when adjacent tile floor
+             * heights differ.
              */
-            if (previous != null &&
-                    current != null &&
-                    Math.abs(
-                            previous.floor -
-                                    current.floor
-                    ) > 0.000001f) {
+            if (current != null &&
+                    next != null) {
 
-                float low =
-                        Math.min(
-                                previous.floor,
-                                current.floor
+                float oldFloor =
+                        current.floor;
+
+                float newFloor =
+                        next.floor;
+
+                if (Math.abs(
+                        oldFloor -
+                                newFloor
+                ) > EPSILON) {
+
+                    float low =
+                            Math.min(
+                                    oldFloor,
+                                    newFloor
+                            );
+
+                    float high =
+                            Math.max(
+                                    oldFloor,
+                                    newFloor
+                            );
+
+                    /*
+                     * The upper side owns the visible wall.
+                     *
+                     * This preserves the behavior of the
+                     * original renderer.
+                     */
+                    Tile wallTile;
+
+                    if (oldFloor >
+                            newFloor) {
+
+                        wallTile =
+                                current;
+
+                    } else {
+
+                        wallTile =
+                                next;
+                    }
+
+                    float textureX =
+                            calculateTextureX(
+                                    camera,
+                                    rayDirX,
+                                    rayDirY,
+                                    boundaryDistance,
+                                    side
+                            );
+
+                    float perpendicularDistance =
+                            calculatePerpendicularDistance(
+                                    boundaryDistance,
+                                    rayAngle,
+                                    camera.rotation.y
+                            );
+
+                    if (surfaceCount <
+                            surfacePool.length) {
+
+                        Surface surface =
+                                surfacePool[
+                                        surfaceCount++
+                                        ];
+
+                        surface.set(
+                                boundaryDistance,
+                                perpendicularDistance,
+                                low,
+                                high,
+                                textureX,
+                                wallTile
                         );
 
-                float high =
-                        Math.max(
-                                previous.floor,
-                                current.floor
-                        );
+                    } else {
 
-                Tile wallTile;
-
-                if (previous.floor >
-                        current.floor) {
-
-                    wallTile =
-                            previous;
-
-                } else {
-
-                    wallTile =
-                            current;
-                }
-
-                float textureX =
-                        calculateTextureX(
-                                camera,
-                                rayDirX,
-                                rayDirY,
-                                rayDistance,
-                                side
-                        );
-
-                if (surfaceCount <
-                        surfacePool.length) {
-
-                    Surface surface =
-                            surfacePool[
-                                    surfaceCount++
-                                    ];
-
-                    surface.set(
-                            rayDistance,
-                            perpendicularDistance,
-                            low,
-                            high,
-                            textureX,
-                            wallTile
-                    );
+                        surfacePoolOverflows++;
+                    }
                 }
             }
 
@@ -731,56 +849,63 @@ public final class HeightRaycaster {
              * SOLID TILE
              * -------------------------------------------------
              */
-            if (current != null &&
-                    current.solid) {
+
+            if (next != null &&
+                    next.solid) {
 
                 /*
-                 * Current tile extends from this boundary until
-                 * the next boundary.
+                 * Determine how far the solid tile extends
+                 * before its next grid boundary.
                  */
-                float exitDistance =
+                float solidExitDistance =
                         Math.min(
                                 sideDistX,
                                 sideDistY
                         );
 
-                /*
-                 * Clamp to render distance.
-                 */
-                exitDistance =
+                solidExitDistance =
                         Math.min(
-                                exitDistance,
+                                solidExitDistance,
                                 renderDistance
                         );
 
                 /*
                  * -------------------------------------------------
-                 * TOP OF SOLID BLOCK
+                 * SOLID TOP
                  * -------------------------------------------------
                  */
-                if (current.renderTop) {
+
+                if (next.renderTop) {
 
                     planeCount =
                             addSolidTopPlane(
-                                    current,
-                                    rayDistance,
-                                    exitDistance,
+                                    next,
+                                    boundaryDistance,
+                                    solidExitDistance,
                                     planeCount
                             );
                 }
 
                 /*
                  * -------------------------------------------------
-                 * FRONT WALL
+                 * SOLID FRONT WALL
                  * -------------------------------------------------
                  */
+
                 float textureX =
                         calculateTextureX(
                                 camera,
                                 rayDirX,
                                 rayDirY,
-                                rayDistance,
+                                boundaryDistance,
                                 side
+                        );
+
+                float perpendicularDistance =
+                        calculatePerpendicularDistance(
+                                boundaryDistance,
+                                rayAngle,
+                                camera.rotation.y
                         );
 
                 if (surfaceCount <
@@ -792,35 +917,45 @@ public final class HeightRaycaster {
                                     ];
 
                     surface.set(
-                            rayDistance,
+                            boundaryDistance,
                             perpendicularDistance,
-                            current.floor,
-                            current.ceiling,
+                            next.floor,
+                            next.ceiling,
                             textureX,
-                            current
+                            next
                     );
+
+                } else {
+
+                    surfacePoolOverflows++;
                 }
 
                 /*
-                 * Solid geometry stops the ray.
+                 * Solid geometry terminates this ray.
                  */
                 break;
             }
 
             /*
-             * Continue through walkable tile.
+             * -------------------------------------------------
+             * ENTER NEXT WALKABLE TILE
+             * -------------------------------------------------
              */
-            previous =
-                    current;
 
-            previousEntryDistance =
-                    rayDistance;
+            current =
+                    next;
+
+            currentEntryDistance =
+                    boundaryDistance;
         }
 
         /*
          * -----------------------------------------------------
-         * RENDER WALLS
+         * RENDER VERTICAL SURFACES
          * -----------------------------------------------------
+         *
+         * Surfaces are already ordered approximately front to
+         * back by DDA traversal.
          */
         for (int i = 0;
              i < surfaceCount;
@@ -837,9 +972,10 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * RENDER PLANES
+         * RENDER HORIZONTAL PLANES
          * -----------------------------------------------------
          */
+
         for (int i = 0;
              i < planeCount;
              i++) {
@@ -850,6 +986,7 @@ public final class HeightRaycaster {
                     screenX,
                     rayDirX,
                     rayDirY,
+                    rayAngle,
                     planePool[i],
                     depth
             );
@@ -861,6 +998,7 @@ public final class HeightRaycaster {
      * ADD NORMAL TILE PLANES
      * ---------------------------------------------------------
      */
+
     private int addTilePlanes(
             Tile tile,
             float entryDistance,
@@ -881,17 +1019,15 @@ public final class HeightRaycaster {
          * -----------------------------------------------------
          * FLOOR
          * -----------------------------------------------------
+         *
+         * A raised tile uses its top texture for its visible
+         * upper surface when available.
          */
         PixelGraphics floorTexture;
 
         if (tile.floor >
-                0.000001f) {
+                EPSILON) {
 
-            /*
-             * Raised walkable tile.
-             *
-             * Its visible top uses topTexture.
-             */
             floorTexture =
                     getTopTextureSafe(
                             tile
@@ -908,9 +1044,6 @@ public final class HeightRaycaster {
 
         } else {
 
-            /*
-             * Normal floor.
-             */
             floorTexture =
                     getFloorTextureSafe(
                             tile
@@ -935,8 +1068,12 @@ public final class HeightRaycaster {
                         tile,
                         false,
                         tile.floor >
-                                0.000001f
+                                EPSILON
                 );
+
+            } else {
+
+                planePoolOverflows++;
             }
         }
 
@@ -945,6 +1082,7 @@ public final class HeightRaycaster {
          * CEILING
          * -----------------------------------------------------
          */
+
         PixelGraphics ceilingTexture =
                 getCeilingTextureSafe(
                         tile
@@ -969,6 +1107,10 @@ public final class HeightRaycaster {
                         true,
                         false
                 );
+
+            } else {
+
+                planePoolOverflows++;
             }
         }
 
@@ -980,6 +1122,7 @@ public final class HeightRaycaster {
      * ADD SOLID TOP
      * ---------------------------------------------------------
      */
+
     private int addSolidTopPlane(
             Tile tile,
             float entryDistance,
@@ -1002,7 +1145,7 @@ public final class HeightRaycaster {
                 );
 
         /*
-         * Fallback.
+         * Fallback to floor texture.
          */
         if (!validTexture(texture)) {
 
@@ -1017,7 +1160,7 @@ public final class HeightRaycaster {
         }
 
         /*
-         * Top of solid block is at ceiling.
+         * The top of a solid block is at its ceiling.
          */
         if (planeCount <
                 planePool.length) {
@@ -1035,6 +1178,10 @@ public final class HeightRaycaster {
                     false,
                     true
             );
+
+        } else {
+
+            planePoolOverflows++;
         }
 
         return planeCount;
@@ -1045,6 +1192,7 @@ public final class HeightRaycaster {
      * TEXTURE ACCESS
      * ---------------------------------------------------------
      */
+
     private PixelGraphics getTopTextureSafe(
             Tile tile) {
 
@@ -1098,6 +1246,7 @@ public final class HeightRaycaster {
      * HORIZON
      * ---------------------------------------------------------
      */
+
     private float getHorizon(
             Camera3D camera) {
 
@@ -1109,15 +1258,57 @@ public final class HeightRaycaster {
 
     /*
      * ---------------------------------------------------------
+     * PERPENDICULAR DEPTH
+     * ---------------------------------------------------------
+     *
+     * This is the single depth convention used by the renderer.
+     *
+     * rayDistance:
+     *
+     *     distance traveled along the ray
+     *
+     * perpendicularDistance:
+     *
+     *     distance along camera forward direction
+     *
+     * The latter is what goes into the depth buffer.
+     */
+
+    private float calculatePerpendicularDistance(
+            float rayDistance,
+            float rayAngle,
+            float cameraAngle) {
+
+        float distance =
+                rayDistance *
+                        Mathf.cos(
+                                rayAngle -
+                                        cameraAngle
+                        );
+
+        if (distance <
+                MIN_DISTANCE) {
+
+            distance =
+                    MIN_DISTANCE;
+        }
+
+        return distance;
+    }
+
+    /*
+     * ---------------------------------------------------------
      * DRAW PLANE
      * ---------------------------------------------------------
      */
+
     private void drawPlaneDepthTested(
             PixelGraphics pg,
             Camera3D camera,
             int screenX,
             float rayDirX,
             float rayDirY,
+            float rayAngle,
             PlaneSurface plane,
             float[] depth) {
 
@@ -1130,6 +1321,7 @@ public final class HeightRaycaster {
          * SELECT TEXTURE
          * -----------------------------------------------------
          */
+
         PixelGraphics texture;
 
         if (plane.ceiling) {
@@ -1168,16 +1360,17 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * HEIGHT
+         * HEIGHT RELATIVE TO CAMERA
          * -----------------------------------------------------
          */
+
         float relativeHeight =
                 plane.height -
                         camera.position.z;
 
         if (Math.abs(
                 relativeHeight
-        ) < 0.000001f) {
+        ) < EPSILON) {
 
             return;
         }
@@ -1187,16 +1380,19 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * SCREEN HALF
+         * SELECT SCREEN HALF
          * -----------------------------------------------------
          */
+
         int startY;
         int endY;
 
         if (relativeHeight > 0.0f) {
 
             /*
-             * Above camera.
+             * Plane is above camera.
+             *
+             * Render it above the horizon.
              */
             startY = 0;
 
@@ -1208,7 +1404,9 @@ public final class HeightRaycaster {
         } else {
 
             /*
-             * Below camera.
+             * Plane is below camera.
+             *
+             * Render it below the horizon.
              */
             startY =
                     (int) Math.floor(
@@ -1224,6 +1422,7 @@ public final class HeightRaycaster {
          * CLIP
          * -----------------------------------------------------
          */
+
         if (endY < 0 ||
                 startY >= height) {
 
@@ -1247,6 +1446,7 @@ public final class HeightRaycaster {
          * DRAW EACH PIXEL
          * -----------------------------------------------------
          */
+
         for (int y = startY;
              y <= endY;
              y++) {
@@ -1257,21 +1457,25 @@ public final class HeightRaycaster {
 
             if (Math.abs(
                     screenY
-            ) < 0.000001f) {
+            ) < EPSILON) {
 
                 continue;
             }
 
             /*
-             * Perspective.
+             * -------------------------------------------------
+             * RAY DISTANCE
+             * -------------------------------------------------
+             *
+             * This is distance along the actual ray.
              */
-            float distance =
+            float rayDistance =
                     -relativeHeight *
                             focalLength /
                             screenY;
 
-            if (distance <=
-                    0.0001f) {
+            if (rayDistance <=
+                    MIN_DISTANCE) {
 
                 continue;
             }
@@ -1279,23 +1483,28 @@ public final class HeightRaycaster {
             /*
              * Explicit render distance.
              */
-            if (distance >
+            if (rayDistance >
                     renderDistance) {
 
                 continue;
             }
 
             /*
-             * Only inside this tile.
+             * -------------------------------------------------
+             * TILE INTERVAL
+             * -------------------------------------------------
+             *
+             * The point must actually lie within the tile
+             * represented by this plane.
              */
-            if (distance <
+            if (rayDistance <
                     plane.entryDistance -
                             0.0001f) {
 
                 continue;
             }
 
-            if (distance >
+            if (rayDistance >
                     plane.exitDistance +
                             0.0001f) {
 
@@ -1303,9 +1512,29 @@ public final class HeightRaycaster {
             }
 
             /*
-             * Depth test.
+             * -------------------------------------------------
+             * CAMERA-FORWARD DEPTH
+             * -------------------------------------------------
+             *
+             * This is critical:
+             *
+             * the value written into depth[] must have the
+             * same meaning as wall depth.
              */
-            if (distance >=
+            float cameraDepth =
+                    calculatePerpendicularDistance(
+                            rayDistance,
+                            rayAngle,
+                            camera.rotation.y
+                    );
+
+            /*
+             * -------------------------------------------------
+             * DEPTH TEST
+             * -------------------------------------------------
+             */
+
+            if (cameraDepth >=
                     depth[y]) {
 
                 continue;
@@ -1316,21 +1545,23 @@ public final class HeightRaycaster {
              * WORLD POSITION
              * -------------------------------------------------
              */
+
             float worldX =
                     camera.position.x +
                             rayDirX *
-                                    distance;
+                                    rayDistance;
 
             float worldY =
                     camera.position.y +
                             rayDirY *
-                                    distance;
+                                    rayDistance;
 
             /*
              * -------------------------------------------------
-             * LOCAL TILE COORDINATES
+             * WORLD-SPACE TEXTURE COORDINATES
              * -------------------------------------------------
              */
+
             float textureX =
                     worldX -
                             (float) Math.floor(
@@ -1343,6 +1574,11 @@ public final class HeightRaycaster {
                                     worldY
                             );
 
+            /*
+             * floor() should already make these positive for
+             * ordinary finite coordinates, but retain the
+             * normalization for negative world coordinates.
+             */
             if (textureX < 0.0f) {
                 textureX += 1.0f;
             }
@@ -1370,6 +1606,7 @@ public final class HeightRaycaster {
              * TEXTURE PIXEL
              * -------------------------------------------------
              */
+
             int texX =
                     (int) (
                             textureX *
@@ -1401,6 +1638,7 @@ public final class HeightRaycaster {
              * WRITE PIXEL
              * -------------------------------------------------
              */
+
             pg.setPixel(
                     screenX,
                     y,
@@ -1411,10 +1649,13 @@ public final class HeightRaycaster {
             );
 
             /*
-             * Update depth.
+             * -------------------------------------------------
+             * WRITE DEPTH
+             * -------------------------------------------------
              */
+
             depth[y] =
-                    distance;
+                    cameraDepth;
         }
     }
 
@@ -1423,6 +1664,7 @@ public final class HeightRaycaster {
      * DRAW WALL DEPTH TESTED
      * ---------------------------------------------------------
      */
+
     private void drawSurfaceDepthTested(
             PixelGraphics pg,
             Camera3D camera,
@@ -1452,14 +1694,22 @@ public final class HeightRaycaster {
             return;
         }
 
-        float distance =
+        /*
+         * -----------------------------------------------------
+         * DEPTH
+         * -----------------------------------------------------
+         *
+         * surface.perpendicularDistance is already camera
+         * forward depth.
+         */
+        float cameraDepth =
                 surface.perpendicularDistance;
 
-        if (distance <=
-                0.0001f) {
+        if (cameraDepth <=
+                MIN_DISTANCE) {
 
-            distance =
-                    0.0001f;
+            cameraDepth =
+                    MIN_DISTANCE;
         }
 
         /*
@@ -1467,27 +1717,38 @@ public final class HeightRaycaster {
          * PROJECT WALL
          * -----------------------------------------------------
          */
+
         int top =
                 project(
                         camera,
                         surface.high,
-                        distance
+                        cameraDepth
                 );
 
         int bottom =
                 project(
                         camera,
                         surface.low,
-                        distance
+                        cameraDepth
                 );
 
         if (top > bottom) {
 
-            int temp = top;
+            int temp =
+                    top;
 
-            top = bottom;
-            bottom = temp;
+            top =
+                    bottom;
+
+            bottom =
+                    temp;
         }
+
+        /*
+         * -----------------------------------------------------
+         * SCREEN CLIP
+         * -----------------------------------------------------
+         */
 
         if (bottom < 0 ||
                 top >= height) {
@@ -1516,6 +1777,12 @@ public final class HeightRaycaster {
             return;
         }
 
+        /*
+         * -----------------------------------------------------
+         * TEXTURE X
+         * -----------------------------------------------------
+         */
+
         int texX =
                 (int) (
                         surface.textureX *
@@ -1531,21 +1798,31 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * DRAW WALL
+         * DRAW
          * -----------------------------------------------------
          */
+
         for (int y = clippedTop;
              y <= clippedBottom;
              y++) {
 
             /*
-             * Depth.
+             * -------------------------------------------------
+             * DEPTH TEST
+             * -------------------------------------------------
              */
-            if (distance >=
+
+            if (cameraDepth >=
                     depth[y]) {
 
                 continue;
             }
+
+            /*
+             * -------------------------------------------------
+             * VERTICAL TEXTURE COORDINATE
+             * -------------------------------------------------
+             */
 
             float t =
                     (y - top) /
@@ -1571,6 +1848,12 @@ public final class HeightRaycaster {
                             texture.height - 1
                     );
 
+            /*
+             * -------------------------------------------------
+             * WRITE PIXEL
+             * -------------------------------------------------
+             */
+
             pg.setPixel(
                     screenX,
                     y,
@@ -1580,8 +1863,14 @@ public final class HeightRaycaster {
                     )
             );
 
+            /*
+             * -------------------------------------------------
+             * WRITE DEPTH
+             * -------------------------------------------------
+             */
+
             depth[y] =
-                    distance;
+                    cameraDepth;
         }
     }
 
@@ -1590,6 +1879,7 @@ public final class HeightRaycaster {
      * WALL TEXTURE X
      * ---------------------------------------------------------
      */
+
     private float calculateTextureX(
             Camera3D camera,
             float rayDirX,
@@ -1599,6 +1889,12 @@ public final class HeightRaycaster {
 
         float coordinate;
 
+        /*
+         * X-side wall:
+         *
+         * X coordinate is fixed by the grid boundary,
+         * therefore use world Y as texture position.
+         */
         if (side == 0) {
 
             coordinate =
@@ -1609,6 +1905,11 @@ public final class HeightRaycaster {
 
         } else {
 
+            /*
+             * Y-side wall:
+             *
+             * use world X.
+             */
             coordinate =
                     camera.position.x
                             +
@@ -1621,6 +1922,9 @@ public final class HeightRaycaster {
                         coordinate
                 );
 
+        /*
+         * Maintain the original orientation behavior.
+         */
         if (side == 0) {
 
             if (rayDirX > 0.0f) {
@@ -1655,17 +1959,20 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * PROJECT WORLD Z
      * ---------------------------------------------------------
+     *
+     * distance is ALWAYS camera-forward distance here.
      */
+
     private int project(
             Camera3D camera,
             float worldZ,
             float distance) {
 
         if (distance <=
-                0.0001f) {
+                MIN_DISTANCE) {
 
             distance =
-                    0.0001f;
+                    MIN_DISTANCE;
         }
 
         float horizon =
@@ -1683,5 +1990,67 @@ public final class HeightRaycaster {
                                 /
                                 distance
         );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * DEBUG / DIAGNOSTICS
+     * ---------------------------------------------------------
+     *
+     * These methods do not affect rendering.
+     */
+
+    /**
+     * Returns the number of times the vertical-surface pool
+     * was too small.
+     *
+     * A non-zero value means geometry was silently omitted.
+     */
+    public int getSurfacePoolOverflows() {
+
+        return surfacePoolOverflows;
+    }
+
+    /**
+     * Returns the number of times the plane pool was too small.
+     *
+     * A non-zero value means geometry was silently omitted.
+     */
+    public int getPlanePoolOverflows() {
+
+        return planePoolOverflows;
+    }
+
+    /**
+     * Clears pool-overflow diagnostics.
+     */
+    public void resetDiagnostics() {
+
+        surfacePoolOverflows = 0;
+        planePoolOverflows = 0;
+    }
+
+    /**
+     * Returns the configured render distance.
+     */
+    public float getRenderDistance() {
+
+        return renderDistance;
+    }
+
+    /**
+     * Returns the number of reusable vertical-surface objects.
+     */
+    public int getSurfacePoolSize() {
+
+        return surfacePool.length;
+    }
+
+    /**
+     * Returns the number of reusable plane objects.
+     */
+    public int getPlanePoolSize() {
+
+        return planePool.length;
     }
 }
