@@ -1,97 +1,20 @@
 package raycaster;
 
 import berryngine.*;
-
-import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 
 public final class RaycastScene implements Scene {
 
     private TileMap map;
-    private Camera3D camera;
+    private PlayerEntity playerEntity;
     private HeightRaycaster raycaster;
-    private ArrayList<Entity3D> entityList = new ArrayList<Entity3D>();
+    private final ArrayList<Entity3D> entityList = new ArrayList<Entity3D>();
 
     public RaycastScene() {
 
 
     }
 
-    private void updateKeyboardInput(
-            float forwardX,
-            float forwardY,
-            float moveSpeed,
-            float turnSpeed
-    ) {
-        float rightX = -forwardY;
-        float rightY = forwardX;
-
-        // Forward / backward
-        if (Input.isKey(KeyEvent.VK_W)) {
-            camera.position.x += forwardX * moveSpeed;
-            camera.position.y += forwardY * moveSpeed;
-        }
-
-        if (Input.isKey(KeyEvent.VK_S)) {
-            camera.position.x -= forwardX * moveSpeed;
-            camera.position.y -= forwardY * moveSpeed;
-        }
-
-        // Strafing
-        if (Input.isKey(KeyEvent.VK_A)) {
-            camera.position.x -= rightX * moveSpeed;
-            camera.position.y -= rightY * moveSpeed;
-        }
-
-        if (Input.isKey(KeyEvent.VK_D)) {
-            camera.position.x += rightX * moveSpeed;
-            camera.position.y += rightY * moveSpeed;
-        }
-
-        // Turning
-        if (Input.isKey(KeyEvent.VK_LEFT) || Input.isKey(KeyEvent.VK_Q)) {
-            camera.rotation.y -= turnSpeed;
-        }
-
-        if (Input.isKey(KeyEvent.VK_RIGHT) || Input.isKey(KeyEvent.VK_E)) {
-            camera.rotation.y += turnSpeed;
-        }
-
-        // Looking up / down
-        if (Input.isKey(KeyEvent.VK_UP)) {
-            camera.rotation.x += turnSpeed;
-        }
-
-        if (Input.isKey(KeyEvent.VK_DOWN)) {
-            camera.rotation.x -= turnSpeed;
-        }
-    }
-
-    private void updateMouseInput() {
-        int dx = Input.getMouseDeltaX();
-        int dy = Input.getMouseDeltaY();
-
-        // Mouse sensitivity is in radians per pixel.
-        // Do NOT multiply mouse delta by frame delta.
-        float sensitivity = 0.003f;
-
-        // Mouse X -> yaw
-        camera.rotation.y += dx * sensitivity;
-
-        // Mouse Y -> pitch
-        camera.rotation.x -= dy * sensitivity;
-
-        // Prevent the camera from flipping upside down.
-        float maxPitch = Mathf.toRadians(89.0f);
-
-        if (camera.rotation.x > maxPitch) {
-            camera.rotation.x = maxPitch;
-        }
-
-        if (camera.rotation.x < -maxPitch) {
-            camera.rotation.x = -maxPitch;
-        }
-    }
 
     @Override
     public void update(GameWindow gameWindow, float dt) {
@@ -99,22 +22,7 @@ public final class RaycastScene implements Scene {
         {
             entity3D.update(dt);
         }
-        float moveSpeed = 5.0f * dt;
-        float turnSpeed = 3.5f * dt;
-
-        float yaw = camera.rotation.y;
-
-        float forwardX = Mathf.cos(yaw);
-        float forwardY = Mathf.sin(yaw);
-
-        updateKeyboardInput(
-                forwardX,
-                forwardY,
-                moveSpeed,
-                turnSpeed
-        );
-
-        //updateMouseInput();
+        playerEntity.update(dt);
     }
 
     @Override
@@ -125,10 +33,10 @@ public final class RaycastScene implements Scene {
         pg.clear(Color.WHITE);
         raycaster.render(
                 pg,
-                camera,
+                playerEntity.camera,
                 entityList
         );
-        pg.renderString(BitmapFont.DEFAULT_8X9,camera.position.toString(),0,0,Color.BLACK);
+        pg.renderString(BitmapFont.DEFAULT_8X9,playerEntity.pos.toString(),0,0,Color.BLACK);
         //PostFX.saturation(pg, 0.4f);
     }
 
@@ -391,13 +299,13 @@ public final class RaycastScene implements Scene {
 // ------------------------------------------------------------
 
         map = gen.build();
-        camera = new Camera3D(
+        playerEntity = new PlayerEntity(
                 new Vec3(8.0f, 3.0f, 0.5f)
         );
 
         entityList.add(new HeartEntity(new Vec3(8f,8f,0.5f)));
 
-        camera.rotation.y = Mathf.toRadians(90.0f);
+        playerEntity.camera.rotation.y = Mathf.toRadians(90.0f);
 
         raycaster = new HeightRaycaster(
                 map,

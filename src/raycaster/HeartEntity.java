@@ -70,7 +70,6 @@ public class HeartEntity extends Entity3D {
     public void update(float dt) {
         yaw += ROTATION_SPEED * dt;
 
-        // Optional: keep yaw from growing forever
         if (yaw >= Mathf.toRadians(360.0f)) {
             yaw -= Mathf.toRadians(360.0f);
         }
