@@ -4,11 +4,13 @@ import berryngine.GameWindow;
 
 public final class Main {
 
+    public static GameWindow GAME_WINDOW;
+
     public static void main(String[] args) {
-        GameWindow.builder(
+        GAME_WINDOW = GameWindow.builder(
                         "Height Raycaster",
-                        320,
-                        200
+                        480,
+                        242
                 )
                 .scale(3)
                 .targetFps(0)

@@ -6,41 +6,13 @@ import java.awt.event.KeyEvent;
 
 public final class RaycastScene implements Scene {
 
-    private final TileMap map;
-    private final Camera3D camera;
-    private final HeightRaycaster raycaster;
+    private TileMap map;
+    private Camera3D camera;
+    private HeightRaycaster raycaster;
 
     public RaycastScene() {
-//        map = Level.createMap();
-        LevelGenerator.TileStyle outside = new LevelGenerator.TileStyle(
-                6, // concrete
-                2, // grass
-                4, // water
-                7, // sky
-                0.0f,
-                7.0f
-        );
-
-        LevelGenerator.TileStyle road = outside.floorTexture(5);
-
-        map = LevelGenerator.create(64, 64)
-                .floorRect(0,0,64,64, outside)
-                .floorRect(16, 0, 18, 64, road) // road
-                        .build();
 
 
-        camera = new Camera3D(
-                new Vec3(8.0f, 3.0f, 0.5f)
-        );
-
-        camera.rotation.y = Mathf.toRadians(90.0f);
-
-        raycaster = new HeightRaycaster(
-                map,
-                320,
-                200,
-                Mathf.toRadians(70.0f)
-        );
     }
 
     private void updateKeyboardInput(
@@ -155,6 +127,36 @@ public final class RaycastScene implements Scene {
     @Override
     public void onSceneEnter(GameWindow gameWindow) {
 
+        LevelGenerator.TileStyle outside = new LevelGenerator.TileStyle(
+                6, // concrete
+                2, // grass
+                4, // water
+                7, // sky
+                0.0f,
+                2.0f
+        );
+
+        LevelGenerator.TileStyle road = outside.floorTexture(5);
+
+        map = LevelGenerator.create(64, 64)
+                .floorRect(0,0,64,64, outside)
+                .floorRect(16, 0, 18, 64, road) // road
+                .wallRect(0,0,63,63, outside)
+                .ramp(8,3,8,4, 0.0f, 0.2f, outside)
+                .build();
+
+        camera = new Camera3D(
+                new Vec3(8.0f, 3.0f, 0.5f)
+        );
+
+        camera.rotation.y = Mathf.toRadians(90.0f);
+
+        raycaster = new HeightRaycaster(
+                map,
+                gameWindow.getInternalWidth(),
+                gameWindow.getInternalHeight(),
+                Mathf.toRadians(70.0f)
+        );
     }
 
     @Override
