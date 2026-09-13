@@ -9,10 +9,15 @@ public final class RaycastScene implements Scene {
     private PlayerEntity playerEntity;
     private HeightRaycaster raycaster;
     private final ArrayList<Entity3D> entityList = new ArrayList<Entity3D>();
-
+    private final ArrayList<Entity3D> pendingEntityList = new ArrayList<Entity3D>();
+    public static RaycastScene INSTANCE;
     public RaycastScene() {
+        INSTANCE = this;
+    }
 
-
+    public void addEnity(Entity3D entity3D)
+    {
+        pendingEntityList.add(entity3D);
     }
 
 
@@ -23,6 +28,11 @@ public final class RaycastScene implements Scene {
             entity3D.update(dt);
         }
         playerEntity.update(dt);
+        if (!pendingEntityList.isEmpty())
+        {
+            entityList.addAll(pendingEntityList);
+            pendingEntityList.clear();
+        }
     }
 
     @Override

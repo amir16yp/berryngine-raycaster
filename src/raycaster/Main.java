@@ -9,8 +9,8 @@ public final class Main {
     public static void main(String[] args) {
         GAME_WINDOW = GameWindow.builder(
                         "Height Raycaster",
-                        480,
-                        242
+                        320,
+                        200
                 )
                 .scale(3)
                 .targetFps(0)

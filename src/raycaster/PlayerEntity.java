@@ -31,6 +31,7 @@ public class PlayerEntity extends Entity
         updateKeyboardInput(
                 forwardX,
                 forwardY,
+                yaw,
                 moveSpeed,
                 turnSpeed
         );
@@ -66,11 +67,17 @@ public class PlayerEntity extends Entity
     private void updateKeyboardInput(
             float forwardX,
             float forwardY,
+            float yaw,
             float moveSpeed,
             float turnSpeed
     ) {
         float rightX = -forwardY;
         float rightY = forwardX;
+
+        if (Input.isKeyDown(KeyEvent.VK_SPACE))
+        {
+            RaycastScene.INSTANCE.addEnity(new ProjectileEntity(this.pos.copy(), 5.0f, forwardX, forwardY));
+        }
 
         // Forward / backward
         if (Input.isKey(KeyEvent.VK_W)) {
