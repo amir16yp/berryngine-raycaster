@@ -13,4 +13,14 @@ public class Entity {
             pos.addScaled(vel, dt);
         }
     }
+
+    public boolean isOutOfBounds() {
+        TileMap map = RaycastScene.INSTANCE.map;
+
+        return pos.x < 0.0f ||
+                pos.z < 0.0f ||
+                pos.x >= map.getWidth() ||
+                pos.z >= map.getHeight();
+    }
+
 }

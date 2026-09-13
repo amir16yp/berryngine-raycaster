@@ -11,7 +11,7 @@ public class Entity3D extends Entity {
     public float depth;
 
     public float yaw = Mathf.toRadians(45f);
-
+    private boolean removed = false;
     public PixelGraphics texture;
 
     public Entity3D(
@@ -28,5 +28,28 @@ public class Entity3D extends Entity {
         this.depth = depth;
 
         this.texture = texture;
+    }
+
+    public void remove() {
+        if (removed) {
+            return;
+        }
+
+        removed = true;
+
+        RaycastScene.INSTANCE.removeEntity(this);
+    }
+
+    public boolean isRemoved() {
+        return removed;
+    }
+
+    @Override
+    public void update(float dt) {
+        super.update(dt);
+        if (this.isOutOfBounds())
+        {
+            this.remove();
+        }
     }
 }

@@ -5,11 +5,14 @@ import java.util.ArrayList;
 
 public final class RaycastScene implements Scene {
 
-    private TileMap map;
+    public TileMap map;
     private PlayerEntity playerEntity;
     private HeightRaycaster raycaster;
     private final ArrayList<Entity3D> entityList = new ArrayList<Entity3D>();
     private final ArrayList<Entity3D> pendingEntityList = new ArrayList<Entity3D>();
+    private final ArrayList<Entity3D> pendingRemovalList =
+            new ArrayList<>();
+
     public static RaycastScene INSTANCE;
     public RaycastScene() {
         INSTANCE = this;
@@ -21,15 +24,29 @@ public final class RaycastScene implements Scene {
     }
 
 
+    public void removeEntity(Entity3D entity3D) {
+        pendingRemovalList.add(entity3D);
+    }
+
+
     @Override
     public void update(GameWindow gameWindow, float dt) {
-        for (Entity3D entity3D : entityList)
-        {
-            entity3D.update(dt);
+
+        for (Entity3D entity3D : entityList) {
+            if (!entity3D.isRemoved()) {
+                entity3D.update(dt);
+            }
         }
+
         playerEntity.update(dt);
-        if (!pendingEntityList.isEmpty())
-        {
+
+        if (!pendingRemovalList.isEmpty()) {
+            entityList.removeAll(pendingRemovalList);
+            pendingEntityList.removeAll(pendingRemovalList);
+            pendingRemovalList.clear();
+        }
+
+        if (!pendingEntityList.isEmpty()) {
             entityList.addAll(pendingEntityList);
             pendingEntityList.clear();
         }

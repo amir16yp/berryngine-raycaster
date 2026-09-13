@@ -12,7 +12,6 @@ public final class Main {
                         320,
                         200
                 )
-                .scale(3)
                 .targetFps(0)
                 .fixedHz(60)
                 //.setCaptureMouseByDefault(true)
