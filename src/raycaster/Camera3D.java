@@ -9,7 +9,7 @@ public final class Camera3D {
     public Vec3 position;
     public Vec2 rotation;
 
-    public float fov = Mathf.toRadians(70.0f);
+    public float fov = Mathf.toRadians(60f);
 
     public Camera3D(Vec3 position) {
         this.position = position;
