@@ -120,14 +120,16 @@ public final class RaycastScene implements Scene {
     @Override
     public void render(
             GameWindow gameWindow,
-            FramebufferPixelGraphics framebufferPixelGraphics
+            FramebufferPixelGraphics pg
     ) {
-        framebufferPixelGraphics.clear(Color.WHITE);
+        pg.clear(Color.WHITE);
         raycaster.render(
-                framebufferPixelGraphics,
+                pg,
                 camera,
                 entityList
         );
+        pg.renderString(BitmapFont.DEFAULT_8X9,camera.position.toString(),0,0,Color.BLACK);
+        //PostFX.saturation(pg, 0.4f);
     }
 
     @Override
@@ -393,7 +395,7 @@ public final class RaycastScene implements Scene {
                 new Vec3(8.0f, 3.0f, 0.5f)
         );
 
-        entityList.add(new HeartEntity(camera.position.copy()));
+        entityList.add(new HeartEntity(new Vec3(8f,8f,0.5f)));
 
         camera.rotation.y = Mathf.toRadians(90.0f);
 
