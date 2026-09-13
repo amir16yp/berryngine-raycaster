@@ -4,9 +4,6 @@ import berryngine.*;
 
 public final class Level {
 
-    private static final PixelGraphics WALL1 =
-            ShapeGenerator.outlineRectangle(8, 8, 2, Color.RED);
-
     private Level() {
     }
 
@@ -24,8 +21,8 @@ public final class Level {
             for (int x = 0; x < W; x++) {
                 Tile tile = new Tile(0.0f, 2.0f);
                 tile.solid = false;
-                tile.wallTexture = WALL1;
-
+                tile.wallTexture = 0;
+                tile.floorTexture =1;
                 map.set(x, y, tile);
             }
         }
@@ -170,7 +167,7 @@ public final class Level {
         tile.solid = true;
         tile.floor = 0.0f;
         tile.ceiling = 2.0f;
-        tile.wallTexture = WALL1;
+        tile.wallTexture = 0;
     }
 
     private static void open(TileMap map, int x, int y) {
@@ -190,6 +187,6 @@ public final class Level {
         tile.floor = floor;
         tile.ceiling = floor + 2.0f;
         tile.solid = false;
-        tile.wallTexture = WALL1;
+        tile.wallTexture = 0;
     }
 }
