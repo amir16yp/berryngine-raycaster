@@ -1,5 +1,6 @@
 package raycaster;
 
+import berryngine.Mathf;
 import berryngine.PixelGraphics;
 import berryngine.Vec3;
 
@@ -11,7 +12,7 @@ public final class Entity3D {
     public float height;
     public float depth;
 
-    public float rotation;
+    public float yaw = Mathf.toRadians(45f);
 
     public PixelGraphics texture;
 
