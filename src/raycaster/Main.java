@@ -13,6 +13,7 @@ public final class Main {
                 .scale(3)
                 .targetFps(0)
                 .fixedHz(60)
+                .setCaptureMouseByDefault(true)
                 .run(new RaycastScene());
     }
 }

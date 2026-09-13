@@ -27,16 +27,12 @@ public final class RaycastScene implements Scene {
         );
     }
 
-    @Override
-    public void update(GameWindow gameWindow, float delta) {
-        float moveSpeed = 3.0f * delta;
-        float turnSpeed = 2.5f * delta;
-
-        float yaw = camera.rotation.y;
-
-        float forwardX = Mathf.cos(yaw);
-        float forwardY = Mathf.sin(yaw);
-
+    private void updateKeyboardInput(
+            float forwardX,
+            float forwardY,
+            float moveSpeed,
+            float turnSpeed
+    ) {
         float rightX = -forwardY;
         float rightY = forwardX;
 
@@ -70,12 +66,74 @@ public final class RaycastScene implements Scene {
         if (Input.isKey(KeyEvent.VK_RIGHT) || Input.isKey(KeyEvent.VK_E)) {
             camera.rotation.y += turnSpeed;
         }
+
+        // Looking up / down
+        if (Input.isKey(KeyEvent.VK_UP)) {
+            camera.rotation.x += turnSpeed;
+        }
+
+        if (Input.isKey(KeyEvent.VK_DOWN)) {
+            camera.rotation.x -= turnSpeed;
+        }
+    }
+
+    private void updateMouseInput() {
+        int dx = Input.getMouseDeltaX();
+        int dy = Input.getMouseDeltaY();
+
+        // Mouse sensitivity is in radians per pixel.
+        // Do NOT multiply mouse delta by frame delta.
+        float sensitivity = 0.003f;
+
+        // Mouse X -> yaw
+        camera.rotation.y += dx * sensitivity;
+
+        // Mouse Y -> pitch
+        camera.rotation.x -= dy * sensitivity;
+
+        // Prevent the camera from flipping upside down.
+        float maxPitch = Mathf.toRadians(89.0f);
+
+        if (camera.rotation.x > maxPitch) {
+            camera.rotation.x = maxPitch;
+        }
+
+        if (camera.rotation.x < -maxPitch) {
+            camera.rotation.x = -maxPitch;
+        }
     }
 
     @Override
-    public void render(GameWindow gameWindow, FramebufferPixelGraphics framebufferPixelGraphics) {
+    public void update(GameWindow gameWindow, float delta) {
+        float moveSpeed = 3.0f * delta;
+        float turnSpeed = 2.5f * delta;
+
+        float yaw = camera.rotation.y;
+
+        float forwardX = Mathf.cos(yaw);
+        float forwardY = Mathf.sin(yaw);
+
+        updateKeyboardInput(
+                forwardX,
+                forwardY,
+                moveSpeed,
+                turnSpeed
+        );
+
+        updateMouseInput();
+    }
+
+    @Override
+    public void render(
+            GameWindow gameWindow,
+            FramebufferPixelGraphics framebufferPixelGraphics
+    ) {
         framebufferPixelGraphics.clear(Color.WHITE);
-        raycaster.render(framebufferPixelGraphics, camera);
+
+        raycaster.render(
+                framebufferPixelGraphics,
+                camera
+        );
     }
 
     @Override

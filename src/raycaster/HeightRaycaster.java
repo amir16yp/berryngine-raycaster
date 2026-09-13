@@ -60,17 +60,6 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * HORIZONTAL SURFACE
      * ---------------------------------------------------------
-     *
-     * Represents a floor or ceiling belonging to one tile.
-     *
-     * entryDistance:
-     *     Distance where the ray enters the tile.
-     *
-     * exitDistance:
-     *     Distance where the ray leaves the tile.
-     *
-     * height:
-     *     World-space Z of the floor/ceiling.
      */
     private static final class PlaneSurface {
 
@@ -153,7 +142,7 @@ public final class HeightRaycaster {
          *
          * -1 = left side of camera
          *  0 = center
-         * +1 = right side
+         * +1 = right side of camera
          */
         float cameraX =
                 2.0f *
@@ -162,7 +151,7 @@ public final class HeightRaycaster {
                         - 1.0f;
 
         /*
-         * Calculate the ray angle.
+         * Calculate the horizontal ray angle.
          */
         float rayAngle =
                 camera.rotation.y
@@ -175,7 +164,9 @@ public final class HeightRaycaster {
                         );
 
         /*
-         * Normalized ray direction.
+         * Normalized horizontal ray direction.
+         *
+         * Pitch is handled during vertical projection.
          */
         float rayDirX =
                 Mathf.cos(rayAngle);
@@ -218,15 +209,6 @@ public final class HeightRaycaster {
         int mapY =
                 (int) Math.floor(rayY);
 
-        /*
-         * Since rayDir is normalized:
-
-             deltaDistX = distance needed
-                          to cross one X cell
-
-             deltaDistY = distance needed
-                          to cross one Y cell
-         */
         final float deltaDistX;
 
         final float deltaDistY;
@@ -253,20 +235,10 @@ public final class HeightRaycaster {
                     Math.abs(1.0f / rayDirY);
         }
 
-        /*
-         * Ray step direction.
-         */
         final int stepX;
         final int stepY;
 
-        /*
-         * Distance to first vertical grid line.
-         */
         float sideDistX;
-
-        /*
-         * Distance to first horizontal grid line.
-         */
         float sideDistY;
 
         if (rayDirX < 0.0f) {
@@ -304,10 +276,6 @@ public final class HeightRaycaster {
         }
 
         /*
-         * -----------------------------------------------------
-         * SURFACE LISTS
-         * -----------------------------------------------------
-         *
          * DDA discovers everything near -> far.
          *
          * We later reverse both lists and draw far -> near.
@@ -318,9 +286,6 @@ public final class HeightRaycaster {
         List<PlaneSurface> planes =
                 new ArrayList<>();
 
-        /*
-         * Tile currently occupied by the ray.
-         */
         Tile previous = null;
 
         if (map.inBounds(mapX, mapY)) {
@@ -341,17 +306,10 @@ public final class HeightRaycaster {
 
         /*
          * Distance where the current tile begins.
-         *
-         * The first tile begins at the camera.
          */
         float previousEntryDistance =
                 0.0f;
 
-        /*
-         * -----------------------------------------------------
-         * DDA LOOP
-         * -----------------------------------------------------
-         */
         int maxSteps =
                 Math.max(width, height) * 16
                         + 256;
@@ -364,9 +322,6 @@ public final class HeightRaycaster {
 
             final int side;
 
-            /*
-             * Find the closest grid boundary.
-             */
             if (sideDistX < sideDistY) {
 
                 rayDistance =
@@ -378,9 +333,6 @@ public final class HeightRaycaster {
                 mapX +=
                         stepX;
 
-                /*
-                 * Hit an X-aligned grid plane.
-                 */
                 side = 0;
 
             } else {
@@ -394,9 +346,6 @@ public final class HeightRaycaster {
                 mapY +=
                         stepY;
 
-                /*
-                 * Hit a Y-aligned grid plane.
-                 */
                 side = 1;
             }
 
@@ -404,9 +353,6 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * LEFT MAP
              * -------------------------------------------------
-             *
-             * The previous tile continues until this
-             * boundary.
              */
             if (!map.inBounds(mapX, mapY)) {
 
@@ -430,12 +376,6 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * FINISH PREVIOUS TILE
              * -------------------------------------------------
-             *
-             * The previous tile occupies:
-
-                 previousEntryDistance
-                         ->
-                 rayDistance
              */
             if (previous != null) {
 
@@ -452,9 +392,8 @@ public final class HeightRaycaster {
              * PERPENDICULAR DISTANCE
              * -------------------------------------------------
              *
-             * Used only for vertical wall projection.
-             *
-             * This removes fish-eye distortion.
+             * Horizontal distance is used here because
+             * the DDA operates in the X/Y plane.
              */
             float perpendicularDistance =
                     rayDistance *
@@ -473,14 +412,6 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * HEIGHT TRANSITION
              * -------------------------------------------------
-             *
-             * Example:
-
-                 previous floor = 0
-                 current floor  = 1
-
-             * This exposes the vertical face from
-             * Z=0 to Z=1.
              */
             if (previous != null &&
                     current != null &&
@@ -498,9 +429,6 @@ public final class HeightRaycaster {
                                 current.floor
                         );
 
-                /*
-                 * The higher tile owns the exposed face.
-                 */
                 Tile wallTile;
 
                 if (previous.floor > current.floor) {
@@ -514,10 +442,6 @@ public final class HeightRaycaster {
                             current;
                 }
 
-                /*
-                 * Texture coordinate must use REAL
-                 * ray distance.
-                 */
                 float textureX =
                         calculateTextureX(
                                 camera,
@@ -567,18 +491,9 @@ public final class HeightRaycaster {
                         )
                 );
 
-                /*
-                 * The wall blocks everything behind it.
-                 *
-                 * Do NOT add the solid tile's floor/ceiling
-                 * here. They are hidden by the wall.
-                 */
                 break;
             }
 
-            /*
-             * Move to the new tile.
-             */
             previous =
                     current;
 
@@ -642,9 +557,6 @@ public final class HeightRaycaster {
             return;
         }
 
-        /*
-         * Floor.
-         */
         PixelGraphics floorTexture =
                 tile.getFloorTexture();
 
@@ -663,9 +575,6 @@ public final class HeightRaycaster {
             );
         }
 
-        /*
-         * Ceiling.
-         */
         PixelGraphics ceilingTexture =
                 tile.getCeilingTexture();
 
@@ -687,21 +596,33 @@ public final class HeightRaycaster {
 
     /*
      * ---------------------------------------------------------
-     * DRAW FLOOR / CEILING
+     * HORIZON
      * ---------------------------------------------------------
      *
-     * A floor/ceiling is not drawn using a simple projected
-     * rectangle.
+     * Returns the screen-space Y coordinate of the horizon
+     * after applying camera pitch.
      *
-     * Instead, for every screen pixel:
+     * rotation.x > 0:
+     *     camera looks up
+     *     horizon moves down
      *
-     *     1. Find the ray/plane intersection distance.
-     *
-     *     2. Check that the distance lies inside this tile.
-     *
-     *     3. Convert the intersection into world X/Y.
-     *
-     *     4. Convert world X/Y into texture coordinates.
+     * rotation.x < 0:
+     *     camera looks down
+     *     horizon moves up
+     */
+    private float getHorizon(
+            Camera3D camera) {
+
+        return height * 0.5f
+                +
+                camera.rotation.x *
+                        focalLength;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * DRAW FLOOR / CEILING
+     * ---------------------------------------------------------
      */
     private void drawPlane(
             PixelGraphics pg,
@@ -738,106 +659,107 @@ public final class HeightRaycaster {
             return;
         }
 
-        /*
-         * ---------------------------------------------------------
-         * CAMERA / PLANE RELATIONSHIP
-         * ---------------------------------------------------------
-         *
-         * Floor:
-         *
-         *       floorZ < cameraZ
-         *
-         * Ceiling:
-         *
-         *       ceilingZ > cameraZ
-         */
         float planeRelativeHeight =
                 plane.height -
                         camera.position.z;
 
-        /*
-         * If the plane is exactly at camera height,
-         * its projection is at the horizon and the
-         * distance approaches infinity.
-         */
         if (Math.abs(planeRelativeHeight) < 0.000001f) {
             return;
         }
 
         /*
-         * ---------------------------------------------------------
-         * DETERMINE SCREEN RANGE
-         * ---------------------------------------------------------
+         * -----------------------------------------------------
+         * PITCHED HORIZON
+         * -----------------------------------------------------
+         */
+        float horizon =
+                getHorizon(camera);
+
+        /*
+         * A floor is below the camera.
          *
-         * We don't use project(..., 0.0001f) here.
+         * A ceiling is above the camera.
          *
-         * Instead, the important fact is:
-         *
-         * floor  -> below horizon
-         * ceiling -> above horizon
+         * Instead of assuming the horizon is at half the
+         * screen, use the pitched horizon.
          */
         int startY;
         int endY;
 
         if (plane.ceiling) {
 
-            /*
-             * Ceiling is above the camera.
-             *
-             * Only render above the horizon.
-             */
             startY = 0;
-            endY = height / 2 - 1;
+            endY =
+                    (int) Math.ceil(horizon) - 1;
 
         } else {
 
-            /*
-             * Floor is below the camera.
-             *
-             * Only render below the horizon.
-             */
-            startY = height / 2;
-            endY = height - 1;
+            startY =
+                    (int) Math.floor(horizon);
+
+            endY =
+                    height - 1;
         }
 
         /*
-         * ---------------------------------------------------------
+         * Entire plane is outside the screen.
+         */
+        if (endY < 0 ||
+                startY >= height) {
+
+            return;
+        }
+
+        startY =
+                Math.max(
+                        0,
+                        startY
+                );
+
+        endY =
+                Math.min(
+                        height - 1,
+                        endY
+                );
+
+        /*
+         * -----------------------------------------------------
          * DRAW EACH SCREEN PIXEL
-         * ---------------------------------------------------------
+         * -----------------------------------------------------
          */
         for (int y = startY;
              y <= endY;
              y++) {
 
             /*
-             * Screen-space Y measured from the center.
+             * Screen-space Y relative to the pitched horizon.
              *
-             * Pixel center is used for better precision.
+             * Positive = below horizon.
+             * Negative = above horizon.
              */
             float screenY =
                     (y + 0.5f) -
-                            height * 0.5f;
+                            horizon;
 
-        /*
-         * Projection equation:
-
-             screenY =
-                 -(planeZ - cameraZ)
-                 * focalLength
-                 / distance
-
-         *
-         * Therefore:
-
-             distance =
-                 -(planeZ - cameraZ)
-                 * focalLength
-                 / screenY
-         */
             if (Math.abs(screenY) < 0.000001f) {
                 continue;
             }
 
+            /*
+             * Projection equation:
+             *
+             *     screenY =
+             *         -(planeZ - cameraZ)
+             *         * focalLength
+             *         / distance
+             *
+             * Therefore:
+             *
+             *     distance =
+             *         -(planeZ - cameraZ)
+             *         * focalLength
+             *         / screenY
+             */
             float distance =
                     -planeRelativeHeight
                             *
@@ -853,12 +775,9 @@ public final class HeightRaycaster {
             }
 
             /*
-             * -----------------------------------------------------
+             * -------------------------------------------------
              * TILE INTERVAL
-             * -----------------------------------------------------
-             *
-             * This plane only exists between the two DDA
-             * boundaries of this tile.
+             * -------------------------------------------------
              */
             if (distance <
                     plane.entryDistance - 0.0001f) {
@@ -873,9 +792,9 @@ public final class HeightRaycaster {
             }
 
             /*
-             * -----------------------------------------------------
+             * -------------------------------------------------
              * WORLD POSITION
-             * -----------------------------------------------------
+             * -------------------------------------------------
              */
             float worldX =
                     camera.position.x +
@@ -886,11 +805,9 @@ public final class HeightRaycaster {
                             rayDirY * distance;
 
             /*
-             * -----------------------------------------------------
+             * -------------------------------------------------
              * TEXTURE POSITION
-             * -----------------------------------------------------
-             *
-             * Each map tile is one texture repetition.
+             * -------------------------------------------------
              */
             float textureX =
                     worldX -
@@ -900,9 +817,6 @@ public final class HeightRaycaster {
                     worldY -
                             (float) Math.floor(worldY);
 
-            /*
-             * Keep coordinates inside [0,1).
-             */
             if (textureX < 0.0f) {
                 textureX += 1.0f;
             }
@@ -920,9 +834,9 @@ public final class HeightRaycaster {
             }
 
             /*
-             * -----------------------------------------------------
+             * -------------------------------------------------
              * TEXTURE PIXEL
-             * -----------------------------------------------------
+             * -------------------------------------------------
              */
             int texX =
                     (int) (
@@ -954,11 +868,6 @@ public final class HeightRaycaster {
                             )
                     );
 
-            /*
-             * -----------------------------------------------------
-             * DRAW
-             * -----------------------------------------------------
-             */
             pg.setPixel(
                     screenX,
                     y,
@@ -986,11 +895,6 @@ public final class HeightRaycaster {
 
         if (side == 0) {
 
-            /*
-             * X grid plane.
-             *
-             * Y is the coordinate along the wall.
-             */
             coordinate =
                     camera.position.y
                             +
@@ -998,26 +902,15 @@ public final class HeightRaycaster {
 
         } else {
 
-            /*
-             * Y grid plane.
-             *
-             * X is the coordinate along the wall.
-             */
             coordinate =
                     camera.position.x
                             +
                             rayDistance * rayDirX;
         }
 
-        /*
-         * Fractional part.
-         */
         coordinate -=
                 (float) Math.floor(coordinate);
 
-        /*
-         * Consistent wall orientation.
-         */
         if (side == 0) {
 
             if (rayDirX > 0.0f) {
@@ -1035,9 +928,6 @@ public final class HeightRaycaster {
             }
         }
 
-        /*
-         * Keep inside [0, 1).
-         */
         if (coordinate < 0.0f) {
             coordinate = 0.0f;
         }
@@ -1113,7 +1003,7 @@ public final class HeightRaycaster {
         }
 
         /*
-         * Project top and bottom.
+         * Project top and bottom using the pitched horizon.
          */
         int top =
                 project(
@@ -1129,9 +1019,6 @@ public final class HeightRaycaster {
                         distance
                 );
 
-        /*
-         * Make sure top <= bottom.
-         */
         if (top > bottom) {
 
             int temp =
@@ -1144,18 +1031,12 @@ public final class HeightRaycaster {
                     temp;
         }
 
-        /*
-         * Outside screen.
-         */
         if (bottom < 0 ||
                 top >= height) {
 
             return;
         }
 
-        /*
-         * Clip.
-         */
         int clippedTop =
                 Math.max(
                         0,
@@ -1168,9 +1049,6 @@ public final class HeightRaycaster {
                         bottom
                 );
 
-        /*
-         * Horizontal texture coordinate.
-         */
         int texX =
                 (int) (
                         textureX *
@@ -1186,9 +1064,6 @@ public final class HeightRaycaster {
                         )
                 );
 
-        /*
-         * Projected wall height.
-         */
         float projectedHeight =
                 bottom - top;
 
@@ -1196,9 +1071,6 @@ public final class HeightRaycaster {
             return;
         }
 
-        /*
-         * Draw vertical texture.
-         */
         for (int y = clippedTop;
              y <= clippedBottom;
              y++) {
@@ -1247,6 +1119,8 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * PROJECT WORLD Z -> SCREEN Y
      * ---------------------------------------------------------
+     *
+     * Pitch changes the position of the horizon.
      */
     private int project(
             Camera3D camera,
@@ -1257,8 +1131,11 @@ public final class HeightRaycaster {
             distance = 0.0001f;
         }
 
+        float horizon =
+                getHorizon(camera);
+
         return (int) (
-                height * 0.5f
+                horizon
                         -
                         (
                                 worldZ -
