@@ -20,12 +20,10 @@ public final class HeightRaycaster {
      * ---------------------------------------------------------
      * VERTICAL SURFACE
      * ---------------------------------------------------------
-     *
-     * Represents a wall / height transition.
      */
     private static final class Surface {
 
-        final float rayDistance;
+        final float distance;
         final float perpendicularDistance;
 
         final float low;
@@ -36,14 +34,14 @@ public final class HeightRaycaster {
         final Tile tile;
 
         Surface(
-                float rayDistance,
+                float distance,
                 float perpendicularDistance,
                 float low,
                 float high,
                 float textureX,
                 Tile tile) {
 
-            this.rayDistance = rayDistance;
+            this.distance = distance;
             this.perpendicularDistance =
                     perpendicularDistance;
 
@@ -71,22 +69,33 @@ public final class HeightRaycaster {
         final Tile tile;
 
         final boolean ceiling;
+        final boolean top;
 
         PlaneSurface(
                 float entryDistance,
                 float exitDistance,
                 float height,
                 Tile tile,
-                boolean ceiling) {
+                boolean ceiling,
+                boolean top) {
 
-            this.entryDistance = entryDistance;
-            this.exitDistance = exitDistance;
+            this.entryDistance =
+                    entryDistance;
 
-            this.height = height;
+            this.exitDistance =
+                    exitDistance;
 
-            this.tile = tile;
+            this.height =
+                    height;
 
-            this.ceiling = ceiling;
+            this.tile =
+                    tile;
+
+            this.ceiling =
+                    ceiling;
+
+            this.top =
+                    top;
         }
     }
 
@@ -137,22 +146,12 @@ public final class HeightRaycaster {
             Camera3D camera,
             int screenX) {
 
-        /*
-         * Pixel-center coordinate.
-         *
-         * -1 = left side of camera
-         *  0 = center
-         * +1 = right side of camera
-         */
         float cameraX =
                 2.0f *
                         (screenX + 0.5f) /
                         (float) width
                         - 1.0f;
 
-        /*
-         * Calculate the horizontal ray angle.
-         */
         float rayAngle =
                 camera.rotation.y
                         +
@@ -163,11 +162,6 @@ public final class HeightRaycaster {
                                         )
                         );
 
-        /*
-         * Normalized horizontal ray direction.
-         *
-         * Pitch is handled during vertical projection.
-         */
         float rayDirX =
                 Mathf.cos(rayAngle);
 
@@ -209,8 +203,12 @@ public final class HeightRaycaster {
         int mapY =
                 (int) Math.floor(rayY);
 
+        /*
+         * -----------------------------------------------------
+         * DELTA DISTANCE
+         * -----------------------------------------------------
+         */
         final float deltaDistX;
-
         final float deltaDistY;
 
         if (Math.abs(rayDirX) < 0.000001f) {
@@ -221,7 +219,9 @@ public final class HeightRaycaster {
         } else {
 
             deltaDistX =
-                    Math.abs(1.0f / rayDirX);
+                    Math.abs(
+                            1.0f / rayDirX
+                    );
         }
 
         if (Math.abs(rayDirY) < 0.000001f) {
@@ -232,9 +232,16 @@ public final class HeightRaycaster {
         } else {
 
             deltaDistY =
-                    Math.abs(1.0f / rayDirY);
+                    Math.abs(
+                            1.0f / rayDirY
+                    );
         }
 
+        /*
+         * -----------------------------------------------------
+         * STEP
+         * -----------------------------------------------------
+         */
         final int stepX;
         final int stepY;
 
@@ -276,9 +283,9 @@ public final class HeightRaycaster {
         }
 
         /*
-         * DDA discovers everything near -> far.
-         *
-         * We later reverse both lists and draw far -> near.
+         * -----------------------------------------------------
+         * SURFACE LISTS
+         * -----------------------------------------------------
          */
         List<Surface> surfaces =
                 new ArrayList<>();
@@ -286,17 +293,24 @@ public final class HeightRaycaster {
         List<PlaneSurface> planes =
                 new ArrayList<>();
 
+        /*
+         * -----------------------------------------------------
+         * CURRENT TILE
+         * -----------------------------------------------------
+         */
         Tile previous = null;
 
         if (map.inBounds(mapX, mapY)) {
 
             previous =
-                    map.get(mapX, mapY);
+                    map.get(
+                            mapX,
+                            mapY
+                    );
         }
 
         /*
-         * If the camera starts outside the map,
-         * stop immediately.
+         * Camera cannot start outside the map.
          */
         if (previous == null &&
                 !map.inBounds(mapX, mapY)) {
@@ -305,23 +319,35 @@ public final class HeightRaycaster {
         }
 
         /*
-         * Distance where the current tile begins.
+         * Distance where current tile began.
          */
         float previousEntryDistance =
                 0.0f;
 
+        /*
+         * Safety limit.
+         */
         int maxSteps =
-                Math.max(width, height) * 16
-                        + 256;
+                Math.max(
+                        width,
+                        height
+                ) * 16 + 256;
 
+        /*
+         * -----------------------------------------------------
+         * WALK THE RAY
+         * -----------------------------------------------------
+         */
         for (int iteration = 0;
              iteration < maxSteps;
              iteration++) {
 
             final float rayDistance;
-
             final int side;
 
+            /*
+             * Find next grid boundary.
+             */
             if (sideDistX < sideDistY) {
 
                 rayDistance =
@@ -351,7 +377,7 @@ public final class HeightRaycaster {
 
             /*
              * -------------------------------------------------
-             * LEFT MAP
+             * OUTSIDE MAP
              * -------------------------------------------------
              */
             if (!map.inBounds(mapX, mapY)) {
@@ -370,7 +396,10 @@ public final class HeightRaycaster {
             }
 
             Tile current =
-                    map.get(mapX, mapY);
+                    map.get(
+                            mapX,
+                            mapY
+                    );
 
             /*
              * -------------------------------------------------
@@ -391,9 +420,6 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * PERPENDICULAR DISTANCE
              * -------------------------------------------------
-             *
-             * Horizontal distance is used here because
-             * the DDA operates in the X/Y plane.
              */
             float perpendicularDistance =
                     rayDistance *
@@ -402,7 +428,8 @@ public final class HeightRaycaster {
                                             camera.rotation.y
                             );
 
-            if (perpendicularDistance < 0.0001f) {
+            if (perpendicularDistance <
+                    0.0001f) {
 
                 perpendicularDistance =
                         0.0001f;
@@ -412,10 +439,16 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * HEIGHT TRANSITION
              * -------------------------------------------------
+             *
+             * When two walkable tiles have different floor
+             * heights, create a vertical step wall.
              */
             if (previous != null &&
                     current != null &&
-                    previous.floor != current.floor) {
+                    Math.abs(
+                            previous.floor -
+                                    current.floor
+                    ) > 0.000001f) {
 
                 float low =
                         Math.min(
@@ -431,7 +464,8 @@ public final class HeightRaycaster {
 
                 Tile wallTile;
 
-                if (previous.floor > current.floor) {
+                if (previous.floor >
+                        current.floor) {
 
                     wallTile =
                             previous;
@@ -465,12 +499,48 @@ public final class HeightRaycaster {
 
             /*
              * -------------------------------------------------
-             * SOLID WALL
+             * SOLID TILE
              * -------------------------------------------------
              */
             if (current != null &&
                     current.solid) {
 
+                /*
+                 * Current tile extends from this boundary
+                 * until the next grid boundary.
+                 */
+                float exitDistance =
+                        Math.min(
+                                sideDistX,
+                                sideDistY
+                        );
+
+                /*
+                 * -------------------------------------------------
+                 * TOP OF SOLID BLOCK
+                 * -------------------------------------------------
+                 *
+                 * IMPORTANT:
+                 *
+                 * The top is at tile.ceiling.
+                 *
+                 * It uses topTexture.
+                 */
+                if (current.renderTop) {
+
+                    addSolidTopPlane(
+                            planes,
+                            current,
+                            rayDistance,
+                            exitDistance
+                    );
+                }
+
+                /*
+                 * -------------------------------------------------
+                 * FRONT WALL
+                 * -------------------------------------------------
+                 */
                 float textureX =
                         calculateTextureX(
                                 camera,
@@ -491,9 +561,15 @@ public final class HeightRaycaster {
                         )
                 );
 
+                /*
+                 * Solid geometry stops the ray.
+                 */
                 break;
             }
 
+            /*
+             * Continue through walkable tile.
+             */
             previous =
                     current;
 
@@ -503,44 +579,62 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * DRAW PLANES FAR -> NEAR
+         * RENDER EVERYTHING WITH PER-PIXEL DEPTH
+         * -----------------------------------------------------
+         *
+         * We don't simply draw all planes and then all walls.
+         *
+         * Instead, create a small depth buffer for this column.
+         */
+        float[] depth =
+                new float[height];
+
+        for (int y = 0;
+             y < height;
+             y++) {
+
+            depth[y] =
+                    Float.POSITIVE_INFINITY;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * WALLS
          * -----------------------------------------------------
          */
-        Collections.reverse(planes);
+        for (Surface surface : surfaces) {
 
-        for (PlaneSurface plane : planes) {
-
-            drawPlane(
+            drawSurfaceDepthTested(
                     pg,
                     camera,
                     screenX,
-                    rayDirX,
-                    rayDirY,
-                    plane
+                    surface,
+                    depth
             );
         }
 
         /*
          * -----------------------------------------------------
-         * DRAW WALLS FAR -> NEAR
+         * PLANES
          * -----------------------------------------------------
          */
-        Collections.reverse(surfaces);
+        for (PlaneSurface plane : planes) {
 
-        for (Surface surface : surfaces) {
-
-            drawSurface(
+            drawPlaneDepthTested(
                     pg,
                     camera,
                     screenX,
-                    surface
+                    rayDirX,
+                    rayDirY,
+                    plane,
+                    depth
             );
         }
     }
 
     /*
      * ---------------------------------------------------------
-     * ADD FLOOR + CEILING
+     * ADD NORMAL TILE PLANES
      * ---------------------------------------------------------
      */
     private void addTilePlanes(
@@ -557,12 +651,46 @@ public final class HeightRaycaster {
             return;
         }
 
-        PixelGraphics floorTexture =
-                tile.getFloorTexture();
+        /*
+         * -----------------------------------------------------
+         * FLOOR
+         * -----------------------------------------------------
+         */
+        PixelGraphics floorTexture;
 
-        if (floorTexture != null &&
-                floorTexture.width > 0 &&
-                floorTexture.height > 0) {
+        if (tile.floor >
+                0.000001f) {
+
+            /*
+             * Raised walkable tile.
+             *
+             * Its visible top uses topTexture.
+             */
+            floorTexture =
+                    getTopTextureSafe(tile);
+
+            if (!validTexture(
+                    floorTexture)) {
+
+                floorTexture =
+                        getFloorTextureSafe(
+                                tile
+                        );
+            }
+
+        } else {
+
+            /*
+             * Normal floor.
+             */
+            floorTexture =
+                    getFloorTextureSafe(
+                            tile
+                    );
+        }
+
+        if (validTexture(
+                floorTexture)) {
 
             planes.add(
                     new PlaneSurface(
@@ -570,17 +698,25 @@ public final class HeightRaycaster {
                             exitDistance,
                             tile.floor,
                             tile,
-                            false
+                            false,
+                            tile.floor >
+                                    0.000001f
                     )
             );
         }
 
+        /*
+         * -----------------------------------------------------
+         * CEILING
+         * -----------------------------------------------------
+         */
         PixelGraphics ceilingTexture =
-                tile.getCeilingTexture();
+                getCeilingTextureSafe(
+                        tile
+                );
 
-        if (ceilingTexture != null &&
-                ceilingTexture.width > 0 &&
-                ceilingTexture.height > 0) {
+        if (validTexture(
+                ceilingTexture)) {
 
             planes.add(
                     new PlaneSurface(
@@ -588,7 +724,8 @@ public final class HeightRaycaster {
                             exitDistance,
                             tile.ceiling,
                             tile,
-                            true
+                            true,
+                            false
                     )
             );
         }
@@ -596,19 +733,115 @@ public final class HeightRaycaster {
 
     /*
      * ---------------------------------------------------------
+     * ADD SOLID TOP
+     * ---------------------------------------------------------
+     */
+    private void addSolidTopPlane(
+            List<PlaneSurface> planes,
+            Tile tile,
+            float entryDistance,
+            float exitDistance) {
+
+        if (tile == null) {
+            return;
+        }
+
+        if (exitDistance <= entryDistance) {
+            return;
+        }
+
+        PixelGraphics texture =
+                getTopTextureSafe(
+                        tile
+                );
+
+        /*
+         * Fallback.
+         */
+        if (!validTexture(texture)) {
+
+            texture =
+                    getFloorTextureSafe(
+                            tile
+                    );
+        }
+
+        if (!validTexture(texture)) {
+            return;
+        }
+
+        /*
+         * Top of a solid block is at ceiling.
+         */
+        planes.add(
+                new PlaneSurface(
+                        entryDistance,
+                        exitDistance,
+                        tile.ceiling,
+                        tile,
+                        false,
+                        true
+                )
+        );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * TEXTURE ACCESS
+     * ---------------------------------------------------------
+     */
+    private PixelGraphics getTopTextureSafe(
+            Tile tile) {
+
+        if (tile == null) {
+            return null;
+        }
+
+        return tile.getTopTexture();
+    }
+
+    private PixelGraphics getFloorTextureSafe(
+            Tile tile) {
+
+        if (tile == null) {
+            return null;
+        }
+
+        return tile.getFloorTexture();
+    }
+
+    private PixelGraphics getCeilingTextureSafe(
+            Tile tile) {
+
+        if (tile == null) {
+            return null;
+        }
+
+        return tile.getCeilingTexture();
+    }
+
+    private PixelGraphics getWallTextureSafe(
+            Tile tile) {
+
+        if (tile == null) {
+            return null;
+        }
+
+        return tile.getWallTexture();
+    }
+
+    private boolean validTexture(
+            PixelGraphics texture) {
+
+        return texture != null &&
+                texture.width > 0 &&
+                texture.height > 0;
+    }
+
+    /*
+     * ---------------------------------------------------------
      * HORIZON
      * ---------------------------------------------------------
-     *
-     * Returns the screen-space Y coordinate of the horizon
-     * after applying camera pitch.
-     *
-     * rotation.x > 0:
-     *     camera looks up
-     *     horizon moves down
-     *
-     * rotation.x < 0:
-     *     camera looks down
-     *     horizon moves up
      */
     private float getHorizon(
             Camera3D camera) {
@@ -621,88 +854,122 @@ public final class HeightRaycaster {
 
     /*
      * ---------------------------------------------------------
-     * DRAW FLOOR / CEILING
+     * DRAW PLANE
      * ---------------------------------------------------------
      */
-    private void drawPlane(
+    private void drawPlaneDepthTested(
             PixelGraphics pg,
             Camera3D camera,
             int screenX,
             float rayDirX,
             float rayDirY,
-            PlaneSurface plane) {
+            PlaneSurface plane,
+            float[] depth) {
 
         if (plane.tile == null) {
             return;
         }
 
+        /*
+         * -----------------------------------------------------
+         * SELECT TEXTURE
+         * -----------------------------------------------------
+         */
         PixelGraphics texture;
 
         if (plane.ceiling) {
 
             texture =
-                    plane.tile.getCeilingTexture();
+                    getCeilingTextureSafe(
+                            plane.tile
+                    );
+
+        } else if (plane.top) {
+
+            /*
+             * THIS IS THE BLOCK TOP.
+             */
+            texture =
+                    getTopTextureSafe(
+                            plane.tile
+                    );
+
+            if (!validTexture(texture)) {
+
+                texture =
+                        getFloorTextureSafe(
+                                plane.tile
+                        );
+            }
 
         } else {
 
             texture =
-                    plane.tile.getFloorTexture();
+                    getFloorTextureSafe(
+                            plane.tile
+                    );
         }
 
-        if (texture == null) {
-            return;
-        }
-
-        if (texture.width <= 0 ||
-                texture.height <= 0) {
-
-            return;
-        }
-
-        float planeRelativeHeight =
-                plane.height -
-                        camera.position.z;
-
-        if (Math.abs(planeRelativeHeight) < 0.000001f) {
+        if (!validTexture(texture)) {
             return;
         }
 
         /*
          * -----------------------------------------------------
-         * PITCHED HORIZON
+         * HEIGHT
          * -----------------------------------------------------
          */
+        float relativeHeight =
+                plane.height -
+                        camera.position.z;
+
+        if (Math.abs(relativeHeight) <
+                0.000001f) {
+
+            return;
+        }
+
         float horizon =
                 getHorizon(camera);
 
         /*
-         * A floor is below the camera.
-         *
-         * A ceiling is above the camera.
-         *
-         * Instead of assuming the horizon is at half the
-         * screen, use the pitched horizon.
+         * -----------------------------------------------------
+         * SCREEN HALF
+         * -----------------------------------------------------
          */
         int startY;
         int endY;
 
-        if (plane.ceiling) {
+        if (relativeHeight > 0.0f) {
 
+            /*
+             * Above camera.
+             */
             startY = 0;
+
             endY =
-                    (int) Math.ceil(horizon) - 1;
+                    (int) Math.ceil(
+                            horizon
+                    ) - 1;
 
         } else {
 
+            /*
+             * Below camera.
+             */
             startY =
-                    (int) Math.floor(horizon);
+                    (int) Math.floor(
+                            horizon
+                    );
 
             endY =
                     height - 1;
         }
 
         /*
-         * Entire plane is outside the screen.
+         * -----------------------------------------------------
+         * CLIP
+         * -----------------------------------------------------
          */
         if (endY < 0 ||
                 startY >= height) {
@@ -724,69 +991,57 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * DRAW EACH SCREEN PIXEL
+         * DRAW EACH PIXEL
          * -----------------------------------------------------
          */
         for (int y = startY;
              y <= endY;
              y++) {
 
-            /*
-             * Screen-space Y relative to the pitched horizon.
-             *
-             * Positive = below horizon.
-             * Negative = above horizon.
-             */
             float screenY =
                     (y + 0.5f) -
                             horizon;
 
-            if (Math.abs(screenY) < 0.000001f) {
+            if (Math.abs(screenY) <
+                    0.000001f) {
+
                 continue;
             }
 
             /*
-             * Projection equation:
-             *
-             *     screenY =
-             *         -(planeZ - cameraZ)
-             *         * focalLength
-             *         / distance
-             *
-             * Therefore:
-             *
-             *     distance =
-             *         -(planeZ - cameraZ)
-             *         * focalLength
-             *         / screenY
+             * Perspective.
              */
             float distance =
-                    -planeRelativeHeight
-                            *
-                            focalLength
-                            /
+                    -relativeHeight *
+                            focalLength /
                             screenY;
 
-            /*
-             * Plane must be in front of camera.
-             */
             if (distance <= 0.0001f) {
                 continue;
             }
 
             /*
-             * -------------------------------------------------
-             * TILE INTERVAL
-             * -------------------------------------------------
+             * Only inside this tile.
              */
             if (distance <
-                    plane.entryDistance - 0.0001f) {
+                    plane.entryDistance -
+                            0.0001f) {
 
                 continue;
             }
 
             if (distance >
-                    plane.exitDistance + 0.0001f) {
+                    plane.exitDistance +
+                            0.0001f) {
+
+                continue;
+            }
+
+            /*
+             * Depth test.
+             */
+            if (distance >=
+                    depth[y]) {
 
                 continue;
             }
@@ -798,24 +1053,30 @@ public final class HeightRaycaster {
              */
             float worldX =
                     camera.position.x +
-                            rayDirX * distance;
+                            rayDirX *
+                                    distance;
 
             float worldY =
                     camera.position.y +
-                            rayDirY * distance;
+                            rayDirY *
+                                    distance;
 
             /*
              * -------------------------------------------------
-             * TEXTURE POSITION
+             * LOCAL TILE COORDINATES
              * -------------------------------------------------
              */
             float textureX =
                     worldX -
-                            (float) Math.floor(worldX);
+                            (float) Math.floor(
+                                    worldX
+                            );
 
             float textureY =
                     worldY -
-                            (float) Math.floor(worldY);
+                            (float) Math.floor(
+                                    worldY
+                            );
 
             if (textureX < 0.0f) {
                 textureX += 1.0f;
@@ -825,13 +1086,23 @@ public final class HeightRaycaster {
                 textureY += 1.0f;
             }
 
-            if (textureX >= 1.0f) {
-                textureX = 0.999999f;
-            }
+            textureX =
+                    Math.max(
+                            0.0f,
+                            Math.min(
+                                    0.999999f,
+                                    textureX
+                            )
+                    );
 
-            if (textureY >= 1.0f) {
-                textureY = 0.999999f;
-            }
+            textureY =
+                    Math.max(
+                            0.0f,
+                            Math.min(
+                                    0.999999f,
+                                    textureY
+                            )
+                    );
 
             /*
              * -------------------------------------------------
@@ -868,6 +1139,11 @@ public final class HeightRaycaster {
                             )
                     );
 
+            /*
+             * -------------------------------------------------
+             * WRITE PIXEL
+             * -------------------------------------------------
+             */
             pg.setPixel(
                     screenX,
                     y,
@@ -876,159 +1152,81 @@ public final class HeightRaycaster {
                             texY
                     )
             );
+
+            /*
+             * Update depth.
+             */
+            depth[y] =
+                    distance;
         }
     }
 
     /*
      * ---------------------------------------------------------
-     * WALL TEXTURE X
+     * DRAW WALL DEPTH TESTED
      * ---------------------------------------------------------
      */
-    private float calculateTextureX(
-            Camera3D camera,
-            float rayDirX,
-            float rayDirY,
-            float rayDistance,
-            int side) {
-
-        float coordinate;
-
-        if (side == 0) {
-
-            coordinate =
-                    camera.position.y
-                            +
-                            rayDistance * rayDirY;
-
-        } else {
-
-            coordinate =
-                    camera.position.x
-                            +
-                            rayDistance * rayDirX;
-        }
-
-        coordinate -=
-                (float) Math.floor(coordinate);
-
-        if (side == 0) {
-
-            if (rayDirX > 0.0f) {
-
-                coordinate =
-                        1.0f - coordinate;
-            }
-
-        } else {
-
-            if (rayDirY < 0.0f) {
-
-                coordinate =
-                        1.0f - coordinate;
-            }
-        }
-
-        if (coordinate < 0.0f) {
-            coordinate = 0.0f;
-        }
-
-        if (coordinate >= 1.0f) {
-            coordinate = 0.999999f;
-        }
-
-        return coordinate;
-    }
-
-    /*
-     * ---------------------------------------------------------
-     * DRAW WALL
-     * ---------------------------------------------------------
-     */
-    private void drawSurface(
+    private void drawSurfaceDepthTested(
             PixelGraphics pg,
             Camera3D camera,
             int screenX,
-            Surface surface) {
+            Surface surface,
+            float[] depth) {
 
-        drawTexturedVertical(
-                pg,
-                camera,
-                screenX,
-                surface.perpendicularDistance,
-                surface.low,
-                surface.high,
-                surface.tile,
-                surface.textureX
-        );
-    }
-
-    /*
-     * ---------------------------------------------------------
-     * DRAW VERTICAL TEXTURE
-     * ---------------------------------------------------------
-     */
-    private void drawTexturedVertical(
-            PixelGraphics pg,
-            Camera3D camera,
-            int screenX,
-            float distance,
-            float low,
-            float high,
-            Tile tile,
-            float textureX) {
+        Tile tile =
+                surface.tile;
 
         if (tile == null) {
             return;
         }
 
-        if (high <= low) {
+        if (surface.high <=
+                surface.low) {
+
             return;
         }
 
         PixelGraphics texture =
-                tile.getWallTexture();
+                getWallTextureSafe(
+                        tile
+                );
 
-        if (texture == null) {
+        if (!validTexture(texture)) {
             return;
         }
 
-        if (texture.width <= 0 ||
-                texture.height <= 0) {
-
-            return;
-        }
+        float distance =
+                surface.perpendicularDistance;
 
         if (distance <= 0.0001f) {
             distance = 0.0001f;
         }
 
         /*
-         * Project top and bottom using the pitched horizon.
+         * -----------------------------------------------------
+         * PROJECT WALL
+         * -----------------------------------------------------
          */
         int top =
                 project(
                         camera,
-                        high,
+                        surface.high,
                         distance
                 );
 
         int bottom =
                 project(
                         camera,
-                        low,
+                        surface.low,
                         distance
                 );
 
         if (top > bottom) {
 
-            int temp =
-                    top;
+            int temp = top;
 
-            top =
-                    bottom;
-
-            bottom =
-                    temp;
+            top = bottom;
+            bottom = temp;
         }
 
         if (bottom < 0 ||
@@ -1049,9 +1247,18 @@ public final class HeightRaycaster {
                         bottom
                 );
 
+        float projectedHeight =
+                bottom - top;
+
+        if (projectedHeight <=
+                0.001f) {
+
+            return;
+        }
+
         int texX =
                 (int) (
-                        textureX *
+                        surface.textureX *
                                 texture.width
                 );
 
@@ -1064,20 +1271,32 @@ public final class HeightRaycaster {
                         )
                 );
 
-        float projectedHeight =
-                bottom - top;
-
-        if (projectedHeight <= 0.001f) {
-            return;
-        }
-
+        /*
+         * -----------------------------------------------------
+         * DRAW WALL
+         * -----------------------------------------------------
+         */
         for (int y = clippedTop;
              y <= clippedBottom;
              y++) {
 
+            /*
+             * Depth.
+             *
+             * Use perpendicular distance so walls don't
+             * suffer fisheye distortion.
+             */
+            float wallDistance =
+                    distance;
+
+            if (wallDistance >=
+                    depth[y]) {
+
+                continue;
+            }
+
             float t =
-                    (y - top)
-                            /
+                    (y - top) /
                             projectedHeight;
 
             t =
@@ -1112,15 +1331,82 @@ public final class HeightRaycaster {
                             texY
                     )
             );
+
+            depth[y] =
+                    wallDistance;
         }
     }
 
     /*
      * ---------------------------------------------------------
-     * PROJECT WORLD Z -> SCREEN Y
+     * WALL TEXTURE X
      * ---------------------------------------------------------
-     *
-     * Pitch changes the position of the horizon.
+     */
+    private float calculateTextureX(
+            Camera3D camera,
+            float rayDirX,
+            float rayDirY,
+            float rayDistance,
+            int side) {
+
+        float coordinate;
+
+        if (side == 0) {
+
+            coordinate =
+                    camera.position.y
+                            +
+                            rayDistance *
+                                    rayDirY;
+
+        } else {
+
+            coordinate =
+                    camera.position.x
+                            +
+                            rayDistance *
+                                    rayDirX;
+        }
+
+        coordinate -=
+                (float) Math.floor(
+                        coordinate
+                );
+
+        if (side == 0) {
+
+            if (rayDirX > 0.0f) {
+
+                coordinate =
+                        1.0f -
+                                coordinate;
+            }
+
+        } else {
+
+            if (rayDirY < 0.0f) {
+
+                coordinate =
+                        1.0f -
+                                coordinate;
+            }
+        }
+
+        if (coordinate < 0.0f) {
+            coordinate = 0.0f;
+        }
+
+        if (coordinate >= 1.0f) {
+            coordinate = 0.999999f;
+        }
+
+        return coordinate;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * PROJECT WORLD Z
+     * ---------------------------------------------------------
      */
     private int project(
             Camera3D camera,
@@ -1147,4 +1433,5 @@ public final class HeightRaycaster {
                                 distance
         );
     }
+
 }

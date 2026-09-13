@@ -35,8 +35,9 @@ public class Tile {
     public int floorTexture;
     public int ceilingTexture;
     public int wallTexture;
-
+    public int topTexture;
     public boolean solid;
+    public boolean renderTop;
 
     public Tile(float floor, float ceiling) {
         this.floor = floor;
@@ -46,7 +47,7 @@ public class Tile {
         this.floorTexture = 0;
         this.ceilingTexture = 0;
         this.wallTexture = 0;
-
+        this.renderTop = false;
         this.solid = false;
     }
 
@@ -61,4 +62,5 @@ public class Tile {
     public PixelGraphics getCeilingTexture() {
         return textureMap[this.ceilingTexture];
     }
+    public PixelGraphics getTopTexture() {return textureMap[this.topTexture];}
 }

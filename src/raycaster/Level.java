@@ -8,22 +8,63 @@ public final class Level {
     }
 
     public static TileMap createMap() {
+
         final int W = 16;
         final int H = 16;
 
-        TileMap map = new TileMap(W, H);
+        TileMap map =
+                new TileMap(W, H);
 
         // -----------------------------------------------------------------
         // Base map
         // -----------------------------------------------------------------
+        //
+        // Normal floor:
+        //
+        //     floorTexture = DIRT
+        //
+        // Walls:
+        //
+        //     wallTexture = BRICK
+        //
+        // Raised tiles:
+        //
+        //     topTexture = DIRT
+        //
+        // -----------------------------------------------------------------
 
         for (int y = 0; y < H; y++) {
+
             for (int x = 0; x < W; x++) {
-                Tile tile = new Tile(0.0f, 2.0f);
+
+                Tile tile =
+                        new Tile(
+                                0.0f,
+                                2.0f
+                        );
+
                 tile.solid = false;
+
                 tile.wallTexture = 0;
-                tile.floorTexture =1;
-                map.set(x, y, tile);
+
+                tile.floorTexture = 1;
+
+                /*
+                 * Default top texture.
+                 *
+                 * This doesn't affect normal floor tiles.
+                 * It is only used when the tile is rendered
+                 * as the top of a solid block.
+                 */
+                tile.topTexture = 1;
+
+                tile.ceilingTexture = 0;
+
+                map.set(
+                        x,
+                        y,
+                        tile
+                );
             }
         }
 
@@ -32,11 +73,13 @@ public final class Level {
         // -----------------------------------------------------------------
 
         for (int x = 0; x < W; x++) {
+
             wall(map, x, 0);
             wall(map, x, H - 1);
         }
 
         for (int y = 0; y < H; y++) {
+
             wall(map, 0, y);
             wall(map, W - 1, y);
         }
@@ -63,7 +106,7 @@ public final class Level {
         wall(map, 4, 8);
         wall(map, 4, 9);
 
-        // Doorway through the wall.
+        // Doorway through wall.
         open(map, 4, 4);
 
         // -----------------------------------------------------------------
@@ -84,6 +127,14 @@ public final class Level {
 
         // -----------------------------------------------------------------
         // Central raised platform
+        // -----------------------------------------------------------------
+        //
+        // Top:
+        //     DIRT
+        //
+        // Sides:
+        //     BRICK
+        //
         // -----------------------------------------------------------------
 
         height(map, 6, 5, 1.0f);
@@ -150,7 +201,7 @@ public final class Level {
         open(map, 8, 11);
 
         // -----------------------------------------------------------------
-        // A few varying-height tiles for testing transitions
+        // Varying-height tiles
         // -----------------------------------------------------------------
 
         height(map, 5, 13, 0.25f);
@@ -161,20 +212,56 @@ public final class Level {
         return map;
     }
 
-    private static void wall(TileMap map, int x, int y) {
-        Tile tile = map.get(x, y);
+    // ---------------------------------------------------------------------
+    // WALL
+    // ---------------------------------------------------------------------
+
+    private static void wall(
+            TileMap map,
+            int x,
+            int y) {
+
+        Tile tile =
+                map.get(x, y);
 
         tile.solid = true;
+
         tile.floor = 0.0f;
+
         tile.ceiling = 2.0f;
+
+        /*
+         * Vertical sides.
+         */
         tile.wallTexture = 0;
+
+        /*
+         * Top of the wall.
+         *
+         * Dirt for now so you can clearly see
+         * that the top texture is working.
+         */
+        tile.topTexture = 1;
     }
 
-    private static void open(TileMap map, int x, int y) {
-        Tile tile = map.get(x, y);
+    // ---------------------------------------------------------------------
+    // OPEN
+    // ---------------------------------------------------------------------
+
+    private static void open(
+            TileMap map,
+            int x,
+            int y) {
+
+        Tile tile =
+                map.get(x, y);
 
         tile.solid = false;
     }
+
+    // ---------------------------------------------------------------------
+    // HEIGHT
+    // ---------------------------------------------------------------------
 
     private static void height(
             TileMap map,
@@ -182,11 +269,29 @@ public final class Level {
             int y,
             float floor) {
 
-        Tile tile = map.get(x, y);
+        Tile tile =
+                map.get(x, y);
 
         tile.floor = floor;
-        tile.ceiling = floor + 2.0f;
+
+        tile.ceiling =
+                floor + 2.0f;
+
         tile.solid = false;
+
+        /*
+         * Sides of the height transition.
+         */
         tile.wallTexture = 0;
+
+        /*
+         * This is deliberately set even though this tile
+         * is not solid.
+         *
+         * It gives us a useful material if you later decide
+         * that raised walkable tiles should use their own
+         * explicit top surface.
+         */
+        tile.topTexture = 1;
     }
 }
