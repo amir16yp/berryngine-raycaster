@@ -4,7 +4,7 @@ import berryngine.Mathf;
 import berryngine.PixelGraphics;
 import berryngine.Vec3;
 
-public final class Entity3D {
+public class Entity3D {
 
     public Vec3 pos;
 
@@ -30,5 +30,10 @@ public final class Entity3D {
         this.depth = depth;
 
         this.texture = texture;
+    }
+
+    public void update(float dt)
+    {
+
     }
 }

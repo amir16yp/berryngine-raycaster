@@ -94,9 +94,13 @@ public final class RaycastScene implements Scene {
     }
 
     @Override
-    public void update(GameWindow gameWindow, float delta) {
-        float moveSpeed = 5.0f * delta;
-        float turnSpeed = 3.5f * delta;
+    public void update(GameWindow gameWindow, float dt) {
+        for (Entity3D entity3D : entityList)
+        {
+            entity3D.update(dt);
+        }
+        float moveSpeed = 5.0f * dt;
+        float turnSpeed = 3.5f * dt;
 
         float yaw = camera.rotation.y;
 
@@ -389,23 +393,7 @@ public final class RaycastScene implements Scene {
                 new Vec3(8.0f, 3.0f, 0.5f)
         );
 
-        entityList.add(
-                new Entity3D(
-                        new Vec3(
-                                8.0f,
-                                8.0f,
-                                0.0f
-                        ),
-                        1.0f,
-                        1.0f,
-                        0.2f,
-                        ShapeGenerator.outlineHeart(
-                                32,
-                                32,
-                                Color.RED
-                        )
-                )
-        );
+        entityList.add(new HeartEntity(camera.position.copy()));
 
         camera.rotation.y = Mathf.toRadians(90.0f);
 
