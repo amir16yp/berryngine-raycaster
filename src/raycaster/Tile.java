@@ -1,52 +1,64 @@
 package raycaster;
 
-import berryngine.Color;
-import berryngine.PixelGraphics;
-import berryngine.ShapeGenerator;
-import berryngine.SpriteSheetFont;
+import berryngine.*;
 
-import java.util.HashMap;
+public class Tile {
 
-public final class Tile {
-
-    private static PixelGraphics generateGenericTile(int number)
-    {
+    private static PixelGraphics generateGenericTile(int number) {
         PixelGraphics tile = new PixelGraphics(18, 18);
         tile.clear(Color.WHITE);
-        tile.drawImage(ShapeGenerator.outlineRectangle(18, 18, 1, Color.RED),0,0);
-        tile.renderString(SpriteSheetFont.START2P, String.valueOf(number), 2, 2, Color.BLACK);
+        tile.drawImage(
+                ShapeGenerator.outlineRectangle(18, 18, 1, Color.RED),
+                0,
+                0
+        );
+        tile.renderString(
+                SpriteSheetFont.START2P,
+                String.valueOf(number),
+                2,
+                2,
+                Color.BLACK
+        );
         return tile;
     }
 
-    private static PixelGraphics[] textureMap = new PixelGraphics[]{generateGenericTile(0),generateGenericTile(1)};
+    private static Random.State rng = Random.newState(42L);
+
+    private static PixelGraphics[] textureMap = new PixelGraphics[] {
+            MaterialGenerator.generate(MaterialGenerator.Material.BRICK, 32, 32, rng),
+            MaterialGenerator.generate(MaterialGenerator.Material.DIRT, 32, 32, rng),
+    };
 
     public float floor;
     public float ceiling;
 
     public int floorTexture;
     public int ceilingTexture;
-
     public int wallTexture;
-
-    public PixelGraphics getWallTexture()
-    {
-        return textureMap[this.wallTexture];
-    }
-
-    public PixelGraphics getFloorTexture()
-    {
-        return textureMap[floorTexture];
-    }
-
-    public PixelGraphics getCeilingTexture()
-    {
-        return textureMap[ceilingTexture];
-    }
 
     public boolean solid;
 
     public Tile(float floor, float ceiling) {
         this.floor = floor;
         this.ceiling = ceiling;
+
+        // Default texture
+        this.floorTexture = 0;
+        this.ceilingTexture = 0;
+        this.wallTexture = 0;
+
+        this.solid = false;
+    }
+
+    public PixelGraphics getWallTexture() {
+        return textureMap[this.wallTexture];
+    }
+
+    public PixelGraphics getFloorTexture() {
+        return textureMap[this.floorTexture];
+    }
+
+    public PixelGraphics getCeilingTexture() {
+        return textureMap[this.ceilingTexture];
     }
 }
