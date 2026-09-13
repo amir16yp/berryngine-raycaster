@@ -3,9 +3,7 @@ package raycaster;
 import berryngine.Mathf;
 import berryngine.PixelGraphics;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.Arrays;
 
 public final class HeightRaycaster {
 
@@ -18,22 +16,47 @@ public final class HeightRaycaster {
 
     /*
      * ---------------------------------------------------------
+     * RENDER DISTANCE
+     * ---------------------------------------------------------
+     *
+     * Measured in world/tile units.
+     *
+     * Rays stop once they reach this distance.
+     */
+    private final float renderDistance;
+
+    /*
+     * ---------------------------------------------------------
+     * REUSABLE RENDER BUFFERS
+     * ---------------------------------------------------------
+     *
+     * These are allocated once in the constructor.
+     *
+     * Nothing is allocated inside render().
+     */
+    private final Surface[] surfacePool;
+    private final PlaneSurface[] planePool;
+
+    private final float[] depth;
+
+    /*
+     * ---------------------------------------------------------
      * VERTICAL SURFACE
      * ---------------------------------------------------------
      */
     private static final class Surface {
 
-        final float distance;
-        final float perpendicularDistance;
+        float distance;
+        float perpendicularDistance;
 
-        final float low;
-        final float high;
+        float low;
+        float high;
 
-        final float textureX;
+        float textureX;
 
-        final Tile tile;
+        Tile tile;
 
-        Surface(
+        void set(
                 float distance,
                 float perpendicularDistance,
                 float low,
@@ -41,16 +64,23 @@ public final class HeightRaycaster {
                 float textureX,
                 Tile tile) {
 
-            this.distance = distance;
+            this.distance =
+                    distance;
+
             this.perpendicularDistance =
                     perpendicularDistance;
 
-            this.low = low;
-            this.high = high;
+            this.low =
+                    low;
 
-            this.textureX = textureX;
+            this.high =
+                    high;
 
-            this.tile = tile;
+            this.textureX =
+                    textureX;
+
+            this.tile =
+                    tile;
         }
     }
 
@@ -61,17 +91,17 @@ public final class HeightRaycaster {
      */
     private static final class PlaneSurface {
 
-        final float entryDistance;
-        final float exitDistance;
+        float entryDistance;
+        float exitDistance;
 
-        final float height;
+        float height;
 
-        final Tile tile;
+        Tile tile;
 
-        final boolean ceiling;
-        final boolean top;
+        boolean ceiling;
+        boolean top;
 
-        PlaneSurface(
+        void set(
                 float entryDistance,
                 float exitDistance,
                 float height,
@@ -99,20 +129,135 @@ public final class HeightRaycaster {
         }
     }
 
+    /*
+     * ---------------------------------------------------------
+     * CONSTRUCTOR
+     * ---------------------------------------------------------
+     */
     public HeightRaycaster(
             TileMap map,
             int width,
             int height,
-            float fov) {
+            float fov,
+            float renderDistance) {
 
         this.map = map;
 
         this.width = width;
         this.height = height;
 
+        this.renderDistance =
+                Math.max(
+                        0.001f,
+                        renderDistance
+                );
+
         this.focalLength =
                 (width * 0.5f) /
-                        Mathf.tan(fov * 0.5f);
+                        Mathf.tan(
+                                fov * 0.5f
+                        );
+
+        /*
+         * -----------------------------------------------------
+         * DEPTH BUFFER
+         * -----------------------------------------------------
+         */
+        depth =
+                new float[height];
+
+        /*
+         * -----------------------------------------------------
+         * POOL SIZE
+         * -----------------------------------------------------
+         *
+         * A ray can cross approximately:
+         *
+         *     renderDistance * sqrt(2)
+         *
+         * tiles in the worst case.
+         *
+         * Add some extra room for boundary cases.
+         */
+        int maxTiles =
+                (int) Math.ceil(
+                        renderDistance *
+                                1.5f
+                ) + 8;
+
+        /*
+         * One vertical transition surface per crossed tile
+         * is enough for normal map geometry.
+         */
+        int maxSurfaces =
+                Math.max(
+                        16,
+                        maxTiles
+                );
+
+        /*
+         * Each walkable tile can produce:
+         *
+         *     floor
+         *     ceiling
+         *
+         * so allow approximately two planes per tile.
+         */
+        int maxPlanes =
+                Math.max(
+                        32,
+                        maxTiles * 2
+                );
+
+        surfacePool =
+                new Surface[maxSurfaces];
+
+        for (int i = 0;
+             i < surfacePool.length;
+             i++) {
+
+            surfacePool[i] =
+                    new Surface();
+        }
+
+        planePool =
+                new PlaneSurface[maxPlanes];
+
+        for (int i = 0;
+             i < planePool.length;
+             i++) {
+
+            planePool[i] =
+                    new PlaneSurface();
+        }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * BACKWARD-COMPATIBLE CONSTRUCTOR
+     * ---------------------------------------------------------
+     *
+     * Optional convenience constructor.
+     *
+     * If you were previously constructing the renderer with:
+     *
+     *     new HeightRaycaster(map, width, height, fov)
+     *
+     * this keeps that code working.
+     */
+    public HeightRaycaster(
+            TileMap map,
+            int width,
+            int height,
+            float fov) {
+
+        this(
+                map,
+                width,
+                height,
+                fov,
+                64.0f
+        );
     }
 
     /*
@@ -205,13 +350,36 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
+         * RESET COUNTERS
+         * -----------------------------------------------------
+         *
+         * No allocations.
+         *
+         * The objects in the pools are simply overwritten.
+         */
+        int surfaceCount = 0;
+        int planeCount = 0;
+
+        /*
+         * -----------------------------------------------------
+         * RESET DEPTH
+         * -----------------------------------------------------
+         */
+        Arrays.fill(
+                depth,
+                Float.POSITIVE_INFINITY
+        );
+
+        /*
+         * -----------------------------------------------------
          * DELTA DISTANCE
          * -----------------------------------------------------
          */
         final float deltaDistX;
         final float deltaDistY;
 
-        if (Math.abs(rayDirX) < 0.000001f) {
+        if (Math.abs(rayDirX) <
+                0.000001f) {
 
             deltaDistX =
                     Float.POSITIVE_INFINITY;
@@ -220,11 +388,13 @@ public final class HeightRaycaster {
 
             deltaDistX =
                     Math.abs(
-                            1.0f / rayDirX
+                            1.0f /
+                                    rayDirX
                     );
         }
 
-        if (Math.abs(rayDirY) < 0.000001f) {
+        if (Math.abs(rayDirY) <
+                0.000001f) {
 
             deltaDistY =
                     Float.POSITIVE_INFINITY;
@@ -233,7 +403,8 @@ public final class HeightRaycaster {
 
             deltaDistY =
                     Math.abs(
-                            1.0f / rayDirY
+                            1.0f /
+                                    rayDirY
                     );
         }
 
@@ -284,23 +455,14 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * SURFACE LISTS
-         * -----------------------------------------------------
-         */
-        List<Surface> surfaces =
-                new ArrayList<>();
-
-        List<PlaneSurface> planes =
-                new ArrayList<>();
-
-        /*
-         * -----------------------------------------------------
          * CURRENT TILE
          * -----------------------------------------------------
          */
         Tile previous = null;
 
-        if (map.inBounds(mapX, mapY)) {
+        if (map.inBounds(
+                mapX,
+                mapY)) {
 
             previous =
                     map.get(
@@ -313,7 +475,9 @@ public final class HeightRaycaster {
          * Camera cannot start outside the map.
          */
         if (previous == null &&
-                !map.inBounds(mapX, mapY)) {
+                !map.inBounds(
+                        mapX,
+                        mapY)) {
 
             return;
         }
@@ -325,17 +489,18 @@ public final class HeightRaycaster {
                 0.0f;
 
         /*
-         * Safety limit.
+         * -----------------------------------------------------
+         * SAFETY LIMIT
+         * -----------------------------------------------------
          */
         int maxSteps =
-                Math.max(
-                        width,
-                        height
-                ) * 16 + 256;
+                (int) Math.ceil(
+                        renderDistance * 2.0f
+                ) + 16;
 
         /*
          * -----------------------------------------------------
-         * WALK THE RAY
+         * WALK RAY
          * -----------------------------------------------------
          */
         for (int iteration = 0;
@@ -346,7 +511,43 @@ public final class HeightRaycaster {
             final int side;
 
             /*
-             * Find next grid boundary.
+             * -------------------------------------------------
+             * RENDER DISTANCE CHECK
+             * -------------------------------------------------
+             */
+            float nextBoundary =
+                    Math.min(
+                            sideDistX,
+                            sideDistY
+                    );
+
+            if (nextBoundary >
+                    renderDistance) {
+
+                /*
+                 * The current tile still extends up to the
+                 * render-distance boundary.
+                 *
+                 * Render the visible portion of it.
+                 */
+                if (previous != null) {
+
+                    planeCount =
+                            addTilePlanes(
+                                    previous,
+                                    previousEntryDistance,
+                                    renderDistance,
+                                    planeCount
+                            );
+                }
+
+                break;
+            }
+
+            /*
+             * -------------------------------------------------
+             * FIND NEXT GRID BOUNDARY
+             * -------------------------------------------------
              */
             if (sideDistX < sideDistY) {
 
@@ -376,20 +577,43 @@ public final class HeightRaycaster {
             }
 
             /*
+             * Safety check.
+             */
+            if (rayDistance >
+                    renderDistance) {
+
+                if (previous != null) {
+
+                    planeCount =
+                            addTilePlanes(
+                                    previous,
+                                    previousEntryDistance,
+                                    renderDistance,
+                                    planeCount
+                            );
+                }
+
+                break;
+            }
+
+            /*
              * -------------------------------------------------
              * OUTSIDE MAP
              * -------------------------------------------------
              */
-            if (!map.inBounds(mapX, mapY)) {
+            if (!map.inBounds(
+                    mapX,
+                    mapY)) {
 
                 if (previous != null) {
 
-                    addTilePlanes(
-                            planes,
-                            previous,
-                            previousEntryDistance,
-                            rayDistance
-                    );
+                    planeCount =
+                            addTilePlanes(
+                                    previous,
+                                    previousEntryDistance,
+                                    rayDistance,
+                                    planeCount
+                            );
                 }
 
                 break;
@@ -408,12 +632,13 @@ public final class HeightRaycaster {
              */
             if (previous != null) {
 
-                addTilePlanes(
-                        planes,
-                        previous,
-                        previousEntryDistance,
-                        rayDistance
-                );
+                planeCount =
+                        addTilePlanes(
+                                previous,
+                                previousEntryDistance,
+                                rayDistance,
+                                planeCount
+                        );
             }
 
             /*
@@ -439,9 +664,6 @@ public final class HeightRaycaster {
              * -------------------------------------------------
              * HEIGHT TRANSITION
              * -------------------------------------------------
-             *
-             * When two walkable tiles have different floor
-             * heights, create a vertical step wall.
              */
             if (previous != null &&
                     current != null &&
@@ -485,16 +707,23 @@ public final class HeightRaycaster {
                                 side
                         );
 
-                surfaces.add(
-                        new Surface(
-                                rayDistance,
-                                perpendicularDistance,
-                                low,
-                                high,
-                                textureX,
-                                wallTile
-                        )
-                );
+                if (surfaceCount <
+                        surfacePool.length) {
+
+                    Surface surface =
+                            surfacePool[
+                                    surfaceCount++
+                                    ];
+
+                    surface.set(
+                            rayDistance,
+                            perpendicularDistance,
+                            low,
+                            high,
+                            textureX,
+                            wallTile
+                    );
+                }
             }
 
             /*
@@ -506,8 +735,8 @@ public final class HeightRaycaster {
                     current.solid) {
 
                 /*
-                 * Current tile extends from this boundary
-                 * until the next grid boundary.
+                 * Current tile extends from this boundary until
+                 * the next boundary.
                  */
                 float exitDistance =
                         Math.min(
@@ -516,24 +745,28 @@ public final class HeightRaycaster {
                         );
 
                 /*
+                 * Clamp to render distance.
+                 */
+                exitDistance =
+                        Math.min(
+                                exitDistance,
+                                renderDistance
+                        );
+
+                /*
                  * -------------------------------------------------
                  * TOP OF SOLID BLOCK
                  * -------------------------------------------------
-                 *
-                 * IMPORTANT:
-                 *
-                 * The top is at tile.ceiling.
-                 *
-                 * It uses topTexture.
                  */
                 if (current.renderTop) {
 
-                    addSolidTopPlane(
-                            planes,
-                            current,
-                            rayDistance,
-                            exitDistance
-                    );
+                    planeCount =
+                            addSolidTopPlane(
+                                    current,
+                                    rayDistance,
+                                    exitDistance,
+                                    planeCount
+                            );
                 }
 
                 /*
@@ -550,16 +783,23 @@ public final class HeightRaycaster {
                                 side
                         );
 
-                surfaces.add(
-                        new Surface(
-                                rayDistance,
-                                perpendicularDistance,
-                                current.floor,
-                                current.ceiling,
-                                textureX,
-                                current
-                        )
-                );
+                if (surfaceCount <
+                        surfacePool.length) {
+
+                    Surface surface =
+                            surfacePool[
+                                    surfaceCount++
+                                    ];
+
+                    surface.set(
+                            rayDistance,
+                            perpendicularDistance,
+                            current.floor,
+                            current.ceiling,
+                            textureX,
+                            current
+                    );
+                }
 
                 /*
                  * Solid geometry stops the ray.
@@ -579,46 +819,30 @@ public final class HeightRaycaster {
 
         /*
          * -----------------------------------------------------
-         * RENDER EVERYTHING WITH PER-PIXEL DEPTH
-         * -----------------------------------------------------
-         *
-         * We don't simply draw all planes and then all walls.
-         *
-         * Instead, create a small depth buffer for this column.
-         */
-        float[] depth =
-                new float[height];
-
-        for (int y = 0;
-             y < height;
-             y++) {
-
-            depth[y] =
-                    Float.POSITIVE_INFINITY;
-        }
-
-        /*
-         * -----------------------------------------------------
-         * WALLS
+         * RENDER WALLS
          * -----------------------------------------------------
          */
-        for (Surface surface : surfaces) {
+        for (int i = 0;
+             i < surfaceCount;
+             i++) {
 
             drawSurfaceDepthTested(
                     pg,
                     camera,
                     screenX,
-                    surface,
+                    surfacePool[i],
                     depth
             );
         }
 
         /*
          * -----------------------------------------------------
-         * PLANES
+         * RENDER PLANES
          * -----------------------------------------------------
          */
-        for (PlaneSurface plane : planes) {
+        for (int i = 0;
+             i < planeCount;
+             i++) {
 
             drawPlaneDepthTested(
                     pg,
@@ -626,7 +850,7 @@ public final class HeightRaycaster {
                     screenX,
                     rayDirX,
                     rayDirY,
-                    plane,
+                    planePool[i],
                     depth
             );
         }
@@ -637,18 +861,20 @@ public final class HeightRaycaster {
      * ADD NORMAL TILE PLANES
      * ---------------------------------------------------------
      */
-    private void addTilePlanes(
-            List<PlaneSurface> planes,
+    private int addTilePlanes(
             Tile tile,
             float entryDistance,
-            float exitDistance) {
+            float exitDistance,
+            int planeCount) {
 
         if (tile == null) {
-            return;
+            return planeCount;
         }
 
-        if (exitDistance <= entryDistance) {
-            return;
+        if (exitDistance <=
+                entryDistance) {
+
+            return planeCount;
         }
 
         /*
@@ -667,7 +893,9 @@ public final class HeightRaycaster {
              * Its visible top uses topTexture.
              */
             floorTexture =
-                    getTopTextureSafe(tile);
+                    getTopTextureSafe(
+                            tile
+                    );
 
             if (!validTexture(
                     floorTexture)) {
@@ -692,17 +920,24 @@ public final class HeightRaycaster {
         if (validTexture(
                 floorTexture)) {
 
-            planes.add(
-                    new PlaneSurface(
-                            entryDistance,
-                            exitDistance,
-                            tile.floor,
-                            tile,
-                            false,
-                            tile.floor >
-                                    0.000001f
-                    )
-            );
+            if (planeCount <
+                    planePool.length) {
+
+                PlaneSurface plane =
+                        planePool[
+                                planeCount++
+                                ];
+
+                plane.set(
+                        entryDistance,
+                        exitDistance,
+                        tile.floor,
+                        tile,
+                        false,
+                        tile.floor >
+                                0.000001f
+                );
+            }
         }
 
         /*
@@ -718,17 +953,26 @@ public final class HeightRaycaster {
         if (validTexture(
                 ceilingTexture)) {
 
-            planes.add(
-                    new PlaneSurface(
-                            entryDistance,
-                            exitDistance,
-                            tile.ceiling,
-                            tile,
-                            true,
-                            false
-                    )
-            );
+            if (planeCount <
+                    planePool.length) {
+
+                PlaneSurface plane =
+                        planePool[
+                                planeCount++
+                                ];
+
+                plane.set(
+                        entryDistance,
+                        exitDistance,
+                        tile.ceiling,
+                        tile,
+                        true,
+                        false
+                );
+            }
         }
+
+        return planeCount;
     }
 
     /*
@@ -736,18 +980,20 @@ public final class HeightRaycaster {
      * ADD SOLID TOP
      * ---------------------------------------------------------
      */
-    private void addSolidTopPlane(
-            List<PlaneSurface> planes,
+    private int addSolidTopPlane(
             Tile tile,
             float entryDistance,
-            float exitDistance) {
+            float exitDistance,
+            int planeCount) {
 
         if (tile == null) {
-            return;
+            return planeCount;
         }
 
-        if (exitDistance <= entryDistance) {
-            return;
+        if (exitDistance <=
+                entryDistance) {
+
+            return planeCount;
         }
 
         PixelGraphics texture =
@@ -767,22 +1013,31 @@ public final class HeightRaycaster {
         }
 
         if (!validTexture(texture)) {
-            return;
+            return planeCount;
         }
 
         /*
-         * Top of a solid block is at ceiling.
+         * Top of solid block is at ceiling.
          */
-        planes.add(
-                new PlaneSurface(
-                        entryDistance,
-                        exitDistance,
-                        tile.ceiling,
-                        tile,
-                        false,
-                        true
-                )
-        );
+        if (planeCount <
+                planePool.length) {
+
+            PlaneSurface plane =
+                    planePool[
+                            planeCount++
+                            ];
+
+            plane.set(
+                    entryDistance,
+                    exitDistance,
+                    tile.ceiling,
+                    tile,
+                    false,
+                    true
+            );
+        }
+
+        return planeCount;
     }
 
     /*
@@ -886,9 +1141,6 @@ public final class HeightRaycaster {
 
         } else if (plane.top) {
 
-            /*
-             * THIS IS THE BLOCK TOP.
-             */
             texture =
                     getTopTextureSafe(
                             plane.tile
@@ -923,8 +1175,9 @@ public final class HeightRaycaster {
                 plane.height -
                         camera.position.z;
 
-        if (Math.abs(relativeHeight) <
-                0.000001f) {
+        if (Math.abs(
+                relativeHeight
+        ) < 0.000001f) {
 
             return;
         }
@@ -1002,8 +1255,9 @@ public final class HeightRaycaster {
                     (y + 0.5f) -
                             horizon;
 
-            if (Math.abs(screenY) <
-                    0.000001f) {
+            if (Math.abs(
+                    screenY
+            ) < 0.000001f) {
 
                 continue;
             }
@@ -1016,7 +1270,18 @@ public final class HeightRaycaster {
                             focalLength /
                             screenY;
 
-            if (distance <= 0.0001f) {
+            if (distance <=
+                    0.0001f) {
+
+                continue;
+            }
+
+            /*
+             * Explicit render distance.
+             */
+            if (distance >
+                    renderDistance) {
+
                 continue;
             }
 
@@ -1087,21 +1352,17 @@ public final class HeightRaycaster {
             }
 
             textureX =
-                    Math.max(
+                    Math.clamp(
+                            textureX,
                             0.0f,
-                            Math.min(
-                                    0.999999f,
-                                    textureX
-                            )
+                            0.999999f
                     );
 
             textureY =
-                    Math.max(
+                    Math.clamp(
+                            textureY,
                             0.0f,
-                            Math.min(
-                                    0.999999f,
-                                    textureY
-                            )
+                            0.999999f
                     );
 
             /*
@@ -1122,21 +1383,17 @@ public final class HeightRaycaster {
                     );
 
             texX =
-                    Math.max(
+                    Math.clamp(
+                            texX,
                             0,
-                            Math.min(
-                                    texture.width - 1,
-                                    texX
-                            )
+                            texture.width - 1
                     );
 
             texY =
-                    Math.max(
+                    Math.clamp(
+                            texY,
                             0,
-                            Math.min(
-                                    texture.height - 1,
-                                    texY
-                            )
+                            texture.height - 1
                     );
 
             /*
@@ -1198,8 +1455,11 @@ public final class HeightRaycaster {
         float distance =
                 surface.perpendicularDistance;
 
-        if (distance <= 0.0001f) {
-            distance = 0.0001f;
+        if (distance <=
+                0.0001f) {
+
+            distance =
+                    0.0001f;
         }
 
         /*
@@ -1263,12 +1523,10 @@ public final class HeightRaycaster {
                 );
 
         texX =
-                Math.max(
+                Math.clamp(
+                        texX,
                         0,
-                        Math.min(
-                                texture.width - 1,
-                                texX
-                        )
+                        texture.width - 1
                 );
 
         /*
@@ -1282,14 +1540,8 @@ public final class HeightRaycaster {
 
             /*
              * Depth.
-             *
-             * Use perpendicular distance so walls don't
-             * suffer fisheye distortion.
              */
-            float wallDistance =
-                    distance;
-
-            if (wallDistance >=
+            if (distance >=
                     depth[y]) {
 
                 continue;
@@ -1300,12 +1552,10 @@ public final class HeightRaycaster {
                             projectedHeight;
 
             t =
-                    Math.max(
+                    Math.clamp(
+                            t,
                             0.0f,
-                            Math.min(
-                                    0.999999f,
-                                    t
-                            )
+                            0.999999f
                     );
 
             int texY =
@@ -1315,12 +1565,10 @@ public final class HeightRaycaster {
                     );
 
             texY =
-                    Math.max(
+                    Math.clamp(
+                            texY,
                             0,
-                            Math.min(
-                                    texture.height - 1,
-                                    texY
-                            )
+                            texture.height - 1
                     );
 
             pg.setPixel(
@@ -1333,7 +1581,7 @@ public final class HeightRaycaster {
             );
 
             depth[y] =
-                    wallDistance;
+                    distance;
         }
     }
 
@@ -1413,8 +1661,11 @@ public final class HeightRaycaster {
             float worldZ,
             float distance) {
 
-        if (distance <= 0.0001f) {
-            distance = 0.0001f;
+        if (distance <=
+                0.0001f) {
+
+            distance =
+                    0.0001f;
         }
 
         float horizon =
@@ -1433,5 +1684,4 @@ public final class HeightRaycaster {
                                 distance
         );
     }
-
 }

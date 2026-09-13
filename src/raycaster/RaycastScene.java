@@ -93,8 +93,8 @@ public final class RaycastScene implements Scene {
 
     @Override
     public void update(GameWindow gameWindow, float delta) {
-        float moveSpeed = 3.0f * delta;
-        float turnSpeed = 2.5f * delta;
+        float moveSpeed = 5.0f * delta;
+        float turnSpeed = 3.5f * delta;
 
         float yaw = camera.rotation.y;
 
