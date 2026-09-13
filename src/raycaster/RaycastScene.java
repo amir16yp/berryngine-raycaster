@@ -142,7 +142,7 @@ public final class RaycastScene implements Scene {
                 .floorRect(0,0,64,64, outside)
                 .floorRect(16, 0, 18, 64, road) // road
                 .wallRect(0,0,63,63, outside)
-                .ramp(8,3,8,4, 0.0f, 0.2f, outside)
+                .ramp(8,3,8,4, 0.2f, 0.4f, outside)
                 .build();
 
         camera = new Camera3D(
