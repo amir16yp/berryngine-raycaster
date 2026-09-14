@@ -23,7 +23,7 @@ public class Tile {
     }
 
     private static final Random.State RNG = Random.newState(42L);
-    private static final IVec2 DEFAULT_TEXTURE_SIZE = new IVec2(32, 32);
+    private static final IVec2 DEFAULT_TEXTURE_SIZE = new IVec2(24, 24);
 
     public static final int TEX_BRICK          = 0;
     public static final int TEX_DIRT           = 1;

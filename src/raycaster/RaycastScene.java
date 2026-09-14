@@ -119,8 +119,8 @@ public final class RaycastScene implements Scene {
         entityList.add(
                 new HeartEntity(
                         new Vec3(
-                                38.0f,
-                                25.0f,
+                                30f,
+                                30.0f,
                                 0.5f
                         )
                 )

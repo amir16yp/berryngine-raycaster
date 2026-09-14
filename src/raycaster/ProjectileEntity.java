@@ -4,8 +4,7 @@ import berryngine.*;
 
 public class ProjectileEntity extends Entity3D {
     private static final float ROTATION_SPEED = Mathf.toRadians(120f);
-    public static PixelGraphics sprite = ShapeGenerator.circle(32, Color.RED);
-
+    public static PixelGraphics sprite = ShapeGenerator.cross(32, 32, Color.WHITE, 2);
     public ProjectileEntity(Vec3 pos, float speed, float forwardX, float forwardY) {
         super(pos, 0.5f, 0.5f, 0.05f, sprite);
         this.vel = new Vec3(
