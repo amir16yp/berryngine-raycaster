@@ -2,6 +2,14 @@ package raycaster;
 
 public final class TileMap {
 
+    /**
+     * Ambient light level for the entire map.
+     *
+     * <p>1.0 is full brightness, 0.0 is completely dark. Dynamic lights
+     * are added on top of this value.</p>
+     */
+    public float ambientLight = 1.0f;
+
     private final int width;
     private final int height;
     private final Tile[] tiles;
@@ -36,5 +44,13 @@ public final class TileMap {
 
     public int getHeight() {
         return height;
+    }
+
+    public void update(float dt) {
+        for (Tile tile : tiles) {
+            if (tile != null) {
+                tile.update(dt);
+            }
+        }
     }
 }

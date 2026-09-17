@@ -9,6 +9,7 @@ public class Entity3D extends Entity {
     public float width;
     public float height;
     public float depth;
+    public boolean visible = true;
 
     public float yaw = Mathf.toRadians(45f);
     private boolean removed = false;

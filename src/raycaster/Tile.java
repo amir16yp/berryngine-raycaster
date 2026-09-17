@@ -24,6 +24,7 @@ public class Tile {
 
     private static final Random.State RNG = Random.newState(42L);
     private static final IVec2 DEFAULT_TEXTURE_SIZE = new IVec2(24, 24);
+    private static final IVec2 ATLAS_TILE_SIZE = new IVec2(64, 64);
 
     public static final int TEX_BRICK          = 0;
     public static final int TEX_DIRT           = 1;
@@ -56,29 +57,46 @@ public class Tile {
         );
     }
 
-    private static final PixelGraphics[] textureMap = new PixelGraphics[] {
-            mat(MaterialGenerator.Material.BRICK),          // 0
-            mat(MaterialGenerator.Material.DIRT),           // 1
-            mat(MaterialGenerator.Material.GRASS),          // 2
-            mat(MaterialGenerator.Material.SAND),           // 3
-            mat(MaterialGenerator.Material.WATER),          // 4
-            mat(MaterialGenerator.Material.ASPHALT),        // 5
-            mat(MaterialGenerator.Material.CONCRETE),       // 6
-            mat(MaterialGenerator.Material.SKY),            // 7
+    private static final TextureAtlas textureAtlas;
+    private static final PixelGraphics[] fallbackTextureMap;
 
-            mat(MaterialGenerator.Material.PAINTED_WALL),   // 8
-            mat(MaterialGenerator.Material.CINDER_BLOCK),   // 9
-            mat(MaterialGenerator.Material.TERRAZZO),       // 10
-            mat(MaterialGenerator.Material.VINYL_FLOOR),    // 11
-            mat(MaterialGenerator.Material.RUBBER_FLOOR),   // 12
-            mat(MaterialGenerator.Material.HARDWOOD_FLOOR), // 13
-            mat(MaterialGenerator.Material.LOCKER_METAL),   // 14
-            mat(MaterialGenerator.Material.ACOUSTIC_TILE),  // 15
-            mat(MaterialGenerator.Material.CHALKBOARD),     // 16
-            mat(MaterialGenerator.Material.WHITEBOARD),     // 17
-            mat(MaterialGenerator.Material.GLASS),          // 18
-            mat(MaterialGenerator.Material.CHAIN_LINK)      // 19
-    };
+    static {
+        TextureAtlas atlas = null;
+        try {
+            atlas = Utils.loadTextureAtlasFromResources(
+                    "/ir3d/assets/sprites/textures.qoi",
+                    ATLAS_TILE_SIZE.x,
+                    ATLAS_TILE_SIZE.y
+            );
+        } catch (Exception e) {
+            atlas = null;
+        }
+        textureAtlas = atlas;
+
+        fallbackTextureMap = new PixelGraphics[] {
+                mat(MaterialGenerator.Material.BRICK),          // 0
+                mat(MaterialGenerator.Material.DIRT),           // 1
+                mat(MaterialGenerator.Material.GRASS),          // 2
+                mat(MaterialGenerator.Material.SAND),           // 3
+                mat(MaterialGenerator.Material.WATER),          // 4
+                mat(MaterialGenerator.Material.ASPHALT),        // 5
+                mat(MaterialGenerator.Material.CONCRETE),       // 6
+                mat(MaterialGenerator.Material.SKY),            // 7
+
+                mat(MaterialGenerator.Material.PAINTED_WALL),   // 8
+                mat(MaterialGenerator.Material.CINDER_BLOCK),   // 9
+                mat(MaterialGenerator.Material.TERRAZZO),       // 10
+                mat(MaterialGenerator.Material.VINYL_FLOOR),    // 11
+                mat(MaterialGenerator.Material.RUBBER_FLOOR),   // 12
+                mat(MaterialGenerator.Material.HARDWOOD_FLOOR), // 13
+                mat(MaterialGenerator.Material.LOCKER_METAL),   // 14
+                mat(MaterialGenerator.Material.ACOUSTIC_TILE),  // 15
+                mat(MaterialGenerator.Material.CHALKBOARD),     // 16
+                mat(MaterialGenerator.Material.WHITEBOARD),     // 17
+                mat(MaterialGenerator.Material.GLASS),          // 18
+                mat(MaterialGenerator.Material.CHAIN_LINK)      // 19
+        };
+    }
 
     public float floor;
     public float ceiling;
@@ -102,16 +120,38 @@ public class Tile {
         this.solid = false;
     }
 
+    public void update(float dt) {
+    }
+
+    private static PixelGraphics getTexture(int index) {
+        if (textureAtlas != null) {
+            try {
+                return textureAtlas.getTexture(index);
+            } catch (Exception e) {
+                // fall through to fallback
+            }
+        }
+
+        if (index >= 0 && index < fallbackTextureMap.length) {
+            return fallbackTextureMap[index];
+        }
+
+        return generateGenericTile(index);
+    }
+
     public PixelGraphics getWallTexture() {
-        return textureMap[this.wallTexture];
+        return getTexture(this.wallTexture);
     }
 
     public PixelGraphics getFloorTexture() {
-        return textureMap[this.floorTexture];
+        return getTexture(this.floorTexture);
     }
 
     public PixelGraphics getCeilingTexture() {
-        return textureMap[this.ceilingTexture];
+        return getTexture(this.ceilingTexture);
     }
-    public PixelGraphics getTopTexture() {return textureMap[this.topTexture];}
+
+    public PixelGraphics getTopTexture() {
+        return getTexture(this.topTexture);
+    }
 }
